@@ -1,109 +1,78 @@
-<div align="center">
-  <img src="VoiceInk/Assets.xcassets/AppIcon.appiconset/256-mac.png" width="180" height="180" />
-  <h1>VoiceInk</h1>
-  <p>Voice to text app for macOS to transcribe what you say to text almost instantly</p>
+# voice-dictation-jp-template
 
-  [![License](https://img.shields.io/badge/License-GPL%20v3-blue.svg)](https://www.gnu.org/licenses/gpl-3.0)
-  ![Platform](https://img.shields.io/badge/platform-macOS%2015.0%2B-brightgreen)
-  [![GitHub release (latest by date)](https://img.shields.io/github/v/release/Beingpax/VoiceInk)](https://github.com/Beingpax/VoiceInk/releases)
-  ![GitHub all releases](https://img.shields.io/github/downloads/Beingpax/VoiceInk/total)
-  ![GitHub stars](https://img.shields.io/github/stars/Beingpax/VoiceInk?style=social)
-  <p>
-    <a href="https://tryvoiceink.com">Website</a> •
-    <a href="https://www.youtube.com/@tryvoiceink">YouTube</a>
-  </p>
+日本語と英語が混ざった話し方でも、そのまま文字にできる macOS 用の音声入力アプリのテンプレートです。オープンソースの音声入力アプリ [VoiceInk](https://github.com/Beingpax/VoiceInk)（GPL-3.0）をもとに、次の変更を加えています。
 
-  <a href="https://tryvoiceink.com">
-    <img src="https://img.shields.io/badge/Download%20Now-Latest%20Version-blue?style=for-the-badge&logo=apple" alt="Download VoiceInk" width="250"/>
-  </a>
-</div>
+> This is a template for a macOS push-to-talk dictation app that handles Japanese and English mixed in one sentence. It is a modified version of [VoiceInk](https://github.com/Beingpax/VoiceInk) by Beingpax, licensed under GPL-3.0. English summary at the end.
+
+**このリポジトリは VoiceInk の公式版ではありません。** VoiceInk の作者は、ビルド済みのアプリを有料で配布しています。開発を支援したい方は [tryvoiceink.com](https://tryvoiceink.com) をご覧ください。
 
 ---
 
-VoiceInk is a native macOS application that transcribes what you say to text almost instantly. You can find all the information and download the app from [here](https://tryvoiceink.com). 
+## 何が違うか
 
-![VoiceInk Mac App](https://github.com/user-attachments/assets/12367379-83e7-48a6-b52c-4488a6a04bba)
+| 追加・変更したこと | 何のためか |
+|---|---|
+| **Soniox のリアルタイム認識を前提にした設定** | 日本語の文中に英単語が入る話し方を、もっとも正確に文字にできたのが Soniox（`stt-rt-v5`）でした。キーを離してから約0.1秒で確定します。 |
+| **クラウドが失敗したらローカルの Whisper に切り替える** | ネット切断・キーの拒否・空の返答のときは、端末内の Whisper で文字にし、切り替えたことを画面に出します。 |
+| **右 Command キーの誤作動を防ぐ** | 右 Command を他のキーやクリックと一緒に押したときに、録音が始まってしまう不具合を防ぎます。 |
+| **日本語のフィラー除去** | 「えっと」「えー」「うーん」「あのー」などを消します。「まあ」は文頭か読点の前で消し、「あの」「その」は読点の前だけで消します。「あの件」「その件」は残ります。 |
+| **辞書の自動学習を日本語と Electron アプリで動くように修正** | 貼り付けた後に手で直した語を拾い、ローカル AI（Ollama）が辞書に入れるか判定します。Claude・Notion・Obsidian・Slack など Electron 製のアプリでも拾えるようにし、チャット欄で送信した後でも直した内容が消えないようにしました。AI が却下した修正も一覧にチェックなしで出るので、最終判断は自分でできます。 |
+| **共有語彙ファイル** | `~/.config/dictation/vocabulary.json` を辞書と双方向で同期します。他のツールからも同じ語彙を使えます。 |
+| **口述ごとの記録** | `~/.config/dictation/dictation-log.jsonl` に、口述の長さ・音量・どの経路で文字になったか・かかった秒数を1行ずつ残します（本文は残しません）。 |
+| **Soniox の利用額をダッシュボードに表示** | Soniox の利用 API から、今月と先月の請求額を表示します。 |
+| **自己署名の証明書でビルドを固定** | ビルドし直すたびに macOS のアクセシビリティ・マイク権限が外れる問題を避けます。 |
 
-After dedicating the past 5 months to developing this app, I've decided to open source it for the greater good. 
+変更したファイルの一覧は [NOTICE.md](NOTICE.md)、設計の詳細は [docs/TECHNICAL_SPEC.md](docs/TECHNICAL_SPEC.md) にあります。
 
-My goal is to make it **the most efficient and privacy-focused voice-to-text solution for macOS** that is a joy to use. While the source code is now open for experienced developers to build and contribute, purchasing a license helps support continued development and gives you access to automatic updates, priority support, and upcoming features.
+## 必要なもの
 
-## Features
+- macOS 14.4 以降（動作確認は Apple Silicon の Mac のみ。Intel の Mac では未確認）
+- Xcode（App Store から。インストール後に一度起動して利用規約に同意）
+- 空き容量：ビルドに約 3.5GB、ローカルの Whisper モデルを使うならさらに約 1.7GB
+- 任意：[Soniox](https://soniox.com) の API キー（従量課金。リアルタイム認識は1時間あたり約 $0.12）
+- 任意：辞書の自動学習を使うなら [Ollama](https://ollama.com) と、約 10GB のメモリを使う 12B クラスのモデル
 
-- 🎙️ **Accurate Transcription**: Local AI models that transcribe your voice to text with 99% accuracy, almost instantly
-- 🔒 **Privacy First**: 100% offline processing ensures your data never leaves your device
-- ⚡ **Modes**: Intelligent app detection automatically applies your perfect pre-configured settings based on the app/ URL you're on
-- 🧠 **Context Aware**: Smart AI that understands your screen content and adapts to the context
-- 🎯 **Global Shortcuts**: Configurable keyboard or mouse shortcuts for quick recording and push-to-talk functionality
-- 📝 **Personal Dictionary**: Train the AI to understand your unique terminology with custom words, industry terms, and smart text replacements
-- 🔄 **Smart Modes**: Instantly switch between AI-powered modes optimized for different writing styles and contexts
-- 🤖 **AI Assistant**: Built-in voice assistant mode for a quick chatGPT like conversational assistant
+## ビルド
 
-## Get Started
-
-### Download
-Get the latest version with a free trial from [tryvoiceink.com](https://tryvoiceink.com). Your purchase helps me work on VoiceInk full-time and continuously improve it with new features and updates.
-
-#### Homebrew
-Alternatively, you can install VoiceInk via `brew`:
-
-```shell
-brew install --cask voiceink
+```bash
+make local
 ```
 
-### Build from Source
-As an open-source project, you can build VoiceInk yourself by following the instructions in [BUILDING.md](BUILDING.md). However, the compiled version includes additional benefits like automatic updates, priority support via Discord and email, and helps fund ongoing development.
+できあがったアプリは `~/Downloads/VoiceInk.app` に置かれます。`/Applications` に移してから開いてください。
 
-## Requirements
+**権限が毎回外れないようにする（推奨）**：キーチェーンアクセスで「証明書アシスタント → 証明書を作成」を開き、名前を `VoiceInk Local`、種類を「コード署名」にして自己署名証明書を作ってください。`make local` はこの証明書を見つけると、自動でビルドに署名します。署名しないビルドでは、ビルドし直すたびにアクセシビリティとマイクの許可を入れ直す必要があります。
 
-- macOS 15.0 or later
+テストは Xcode なしでも動きます。
 
-## Documentation
+```bash
+make test-core
+```
 
-- [Building from Source](BUILDING.md) - Detailed instructions for building the project
-- [Contributing Guidelines](CONTRIBUTING.md) - How to contribute to VoiceInk
-- [Code of Conduct](CODE_OF_CONDUCT.md) - Our community standards
+## 最初の設定
 
-## Contributing
+1. システム設定 → プライバシーとセキュリティで、VoiceInk に「マイク」「アクセシビリティ」を許可する
+2. VoiceInk の Settings → AI Models → Cloud で Soniox の API キーを入れ、「Soniox V5」を選ぶ
+3. ローカルの代替として、Whisper large-v3-turbo を VoiceInk 内でダウンロードする
+4. Shortcuts で右 Command・Hybrid（押して切り替え、長押しで押している間だけ録音）を選ぶ
+5. macOS 標準の音声入力のショートカットは、二重に反応しないようにオフにする
+6. Dictionary に、自分がよく使う固有名詞を入れる。誤認識されやすい語は Word Replacements にも入れる
 
-This project is **not accepting pull requests** at this time. You're welcome to fork and modify VoiceInk for your own use.
+## ライセンス
 
-You can still contribute by:
-- Reporting bugs via [issues](https://github.com/Beingpax/VoiceInk/issues)
-- Suggesting features or enhancements
-- Improving documentation via issues
-
-For more details, see our [Contributing Guidelines](CONTRIBUTING.md). For build instructions, see our [Building Guide](BUILDING.md).
-
-## License
-
-This project is licensed under the GNU General Public License v3.0 - see the [LICENSE](LICENSE) file for details.
-
-## Support
-
-If you encounter any issues or have questions, please:
-1. Check the existing issues in the GitHub repository
-2. Create a new issue if your problem isn't already reported
-3. Provide as much detail as possible about your environment and the problem
-
-## Acknowledgments
-
-### Core Technology
-- [whisper.cpp](https://github.com/ggerganov/whisper.cpp) - High-performance inference of OpenAI's Whisper model
-- [FluidAudio](https://github.com/FluidInference/FluidAudio) - Used for Parakeet model implementation
-- [TranscribeCpp for Swift](https://github.com/Beingpax/Transcribe-cpp-swift) - SwiftPM distribution of [transcribe.cpp](https://github.com/handy-computer/transcribe.cpp), used for local GGUF transcription models
-- [SenseVoice Small](https://huggingface.co/FunAudioLLM/SenseVoiceSmall) by FunAudioLLM / Alibaba - Multilingual model available under the [FunASR Model Open Source License Agreement](https://github.com/modelscope/FunASR/blob/main/MODEL_LICENSE)
-
-### Essential Dependencies
-- [Sparkle](https://github.com/sparkle-project/Sparkle) - Keeping VoiceInk up to date
-- [KeyboardShortcuts](https://github.com/sindresorhus/KeyboardShortcuts) - User-customizable keyboard shortcuts
-- [LaunchAtLogin](https://github.com/sindresorhus/LaunchAtLogin) - Launch at login functionality
-- [MediaRemoteAdapter](https://github.com/ejbills/mediaremote-adapter) - Media playback control during recording
-- [Zip](https://github.com/marmelroy/Zip) - File compression and decompression utilities
-- [SelectedTextKit](https://github.com/tisfeng/SelectedTextKit) - A modern macOS library for getting selected text
-- [Swift Atomics](https://github.com/apple/swift-atomics) - Low-level atomic operations for thread-safe concurrent programming
-
+GPL-3.0。元の VoiceInk と同じライセンスです。詳細は [LICENSE](LICENSE)、元の README は [docs/UPSTREAM-README.md](docs/UPSTREAM-README.md) にあります。VoiceInk の名前とアイコンは原作者のものです。
 
 ---
 
-Made with ❤️ by Pax
+## English summary
+
+A modified [VoiceInk](https://github.com/Beingpax/VoiceInk) (GPL-3.0) tuned for speakers who mix Japanese and English inside one sentence:
+
+- Soniox real-time (`stt-rt-v5`) as the primary engine, with your vocabulary sent as context
+- Cloud-to-local fallback to on-device Whisper when the network, the key or the answer fails, announced on screen
+- Right-Command hybrid shortcut that no longer fires when combined with other keys or a click
+- Japanese filler removal that leaves real words intact
+- Auto Learn that actually captures hand corrections in Electron apps and in chat boxes, segments Japanese correctly, survives a slow local reviewer, and shows the reviewer's rejections for you to override
+- A shared vocabulary file with two-way sync, a per-dictation journal (no text), and Soniox spend on the dashboard
+- Self-signed signing so rebuilds keep macOS permissions
+
+Build with `make local`; test with `make test-core`. This is not an official VoiceInk release; the VoiceInk name and icon belong to its author.

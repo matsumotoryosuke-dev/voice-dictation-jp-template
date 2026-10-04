@@ -59,9 +59,13 @@ final class StreamingTranscriptionSession: TranscriptionSession {
     private var startupTaskID: UUID?
     private let logger = Logger(subsystem: "com.prakashjoshipax.voiceink", category: "StreamingTranscriptionSession")
 
-    init(streamingService: StreamingTranscriptionService, fallbackService: TranscriptionService) {
+    private let isBatchFallbackEnabled: () -> Bool
+
+    init(streamingService: StreamingTranscriptionService, fallbackService: TranscriptionService,
+         isBatchFallbackEnabled: @escaping () -> Bool = { true }) {
         self.streamingService = streamingService
         self.fallbackService = fallbackService
+        self.isBatchFallbackEnabled = isBatchFallbackEnabled
     }
 
     func prepare(configuration: TranscriptionRuntimeConfiguration) async throws -> ((Data) -> Void)? {
@@ -145,6 +149,11 @@ final class StreamingTranscriptionSession: TranscriptionSession {
             startupTask = nil
             startupTaskID = nil
             streamingService.cancel()
+        }
+
+        guard isBatchFallbackEnabled() else {
+            logger.notice("Streaming did not finalise; leaving the fallback to the local model")
+            throw StreamingTranscriptionError.notConnected
         }
 
         let fallbackStart = Date()

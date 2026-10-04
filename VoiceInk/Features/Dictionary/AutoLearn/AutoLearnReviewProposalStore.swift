@@ -17,6 +17,11 @@ actor AutoLearnReviewProposalStore {
             .appendingPathComponent("auto-learn-review-proposals.json")
     }
 
+    init(fileURL: URL, fileManager: FileManager = .default) {
+        self.fileManager = fileManager
+        self.fileURL = fileURL
+    }
+
     func all() throws -> [AutoLearnReviewProposal] {
         try loadIfNeeded()
         return proposals
@@ -31,9 +36,26 @@ actor AutoLearnReviewProposalStore {
             uniqueKeysWithValues: candidates.map { ($0.candidateID, $0) }
         )
         let additions = decisions.compactMap { decision -> AutoLearnReviewProposal? in
-            guard decision.learningAction != .rejectCorrection,
-                let candidate = candidatesByID[decision.candidateID]
-            else { return nil }
+            guard let candidate = candidatesByID[decision.candidateID] else { return nil }
+
+            if decision.learningAction == .rejectCorrection {
+                // The user has the final say over a rejection too; the reviewer gives no words
+                // for one, so they come from the diff.
+                guard let pair = CorrectionDiffEngine.changedPair(
+                    original: candidate.originalText,
+                    corrected: candidate.correctedText
+                ) else { return nil }
+                return AutoLearnReviewProposal(
+                    id: UUID(),
+                    candidateID: decision.candidateID,
+                    originalText: candidate.originalText,
+                    correctedText: candidate.correctedText,
+                    learningAction: .addReplacementAndVocabulary,
+                    incorrectTextToReplace: pair.source,
+                    correctedVocabularyTerm: pair.destination,
+                    reviewerRejected: true
+                )
+            }
 
             return AutoLearnReviewProposal(
                 id: UUID(),
@@ -92,7 +114,8 @@ actor AutoLearnReviewProposalStore {
             correctedText: proposal.correctedText,
             learningAction: proposal.learningAction,
             incorrectTextToReplace: incorrectTextToReplace,
-            correctedVocabularyTerm: correctedVocabularyTerm
+            correctedVocabularyTerm: correctedVocabularyTerm,
+            reviewerRejected: proposal.reviewerRejected
         )
         guard Self.proposalKey(updatedProposal) != Self.proposalKey(proposal) else { return }
 

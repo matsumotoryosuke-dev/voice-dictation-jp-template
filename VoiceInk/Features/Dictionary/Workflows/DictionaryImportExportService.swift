@@ -413,3 +413,49 @@ enum DictionaryImportExportService {
         return (normalized as NSString).folding(options: .caseInsensitive, locale: nil)
     }
 }
+
+// Moved here from DictionaryArchive.swift so that file compiles without SwiftData,
+// which lets the shared-vocabulary codec be unit tested (Package.swift).
+extension DictionaryImportExportService {
+    static func encodeArchive(_ archive: DictionaryArchive) throws -> Data {
+        let encoder = JSONEncoder()
+        encoder.dateEncodingStrategy = .iso8601
+        encoder.outputFormatting = [.prettyPrinted, .sortedKeys, .withoutEscapingSlashes]
+        return try encoder.encode(archive)
+    }
+
+    static func decodeArchiveData(_ data: Data) throws -> DictionaryImportPayload {
+        DictionaryImportPayload(archive: try decodeArchive(from: data))
+    }
+
+    private static func decodeArchive(from data: Data) throws -> DictionaryArchive {
+        guard
+            let json = try? JSONSerialization.jsonObject(with: data),
+            let root = json as? [String: Any]
+        else {
+            throw DictionaryArchiveError.invalidFile
+        }
+
+        let decoder = JSONDecoder()
+        decoder.dateDecodingStrategy = .iso8601
+
+        guard let format = root["format"] as? String else {
+            throw DictionaryArchiveError.invalidFile
+        }
+        guard format == DictionaryArchive.formatIdentifier else {
+            throw DictionaryArchiveError.unsupportedFormat(format)
+        }
+
+        let archive: DictionaryArchive
+        do {
+            archive = try decoder.decode(DictionaryArchive.self, from: data)
+        } catch {
+            throw DictionaryArchiveError.invalidFile
+        }
+
+        guard archive.schemaVersion == DictionaryArchive.currentSchemaVersion else {
+            throw DictionaryArchiveError.unsupportedVersion(archive.schemaVersion)
+        }
+        return archive
+    }
+}

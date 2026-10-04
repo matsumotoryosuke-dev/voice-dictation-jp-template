@@ -10,6 +10,7 @@ final class AutoLearnAIReviewer: @unchecked Sendable {
             let correctedText: String
         }
 
+        let knownVocabulary: [String]
         let candidatesForReview: [CandidateForReview]
     }
 
@@ -18,6 +19,13 @@ final class AutoLearnAIReviewer: @unchecked Sendable {
         let learningAction: AutoLearnReviewAction
         let incorrectTextToReplace: String?
         let correctedVocabularyTerm: String?
+
+        init(_ decision: AutoLearnReviewText.Decision) {
+            candidateID = decision.candidateID
+            learningAction = decision.learningAction
+            incorrectTextToReplace = decision.incorrectTextToReplace
+            correctedVocabularyTerm = decision.correctedVocabularyTerm
+        }
 
         private enum CodingKeys: String, CodingKey, CaseIterable {
             case candidateID
@@ -88,7 +96,22 @@ final class AutoLearnAIReviewer: @unchecked Sendable {
         return !connectedProviders.isEmpty
     }
 
-    func review(_ candidates: [AutoLearnReviewCandidate]) async throws -> AutoLearnReviewResult {
+    /// Like `hasAvailableProvider`, but asks Ollama again before saying no. VoiceInk
+    /// can start at login before Ollama does, find no models,
+    /// and never look again, so Review Now kept reporting nothing to review.
+    func ensureProviderAvailable() async -> Bool {
+        if hasAvailableProvider { return true }
+        guard let aiService = enhancementService.getAIService() else { return false }
+        let wanted = AutoLearnSettings.selectedProvider
+        guard wanted == nil || wanted == .ollama else { return false }
+        _ = await aiService.refreshOllamaAvailability()
+        return hasAvailableProvider
+    }
+
+    func review(
+        _ candidates: [AutoLearnReviewCandidate],
+        knownVocabulary: [String] = []
+    ) async throws -> AutoLearnReviewResult {
         guard !candidates.isEmpty else {
             return AutoLearnReviewResult(reviewDecisions: [], unresolvedReviews: [])
         }
@@ -113,7 +136,10 @@ final class AutoLearnAIReviewer: @unchecked Sendable {
             )
         }
         let requestData = try JSONEncoder().encode(
-            AutoLearnReviewRequest(candidatesForReview: candidatesForReview)
+            AutoLearnReviewRequest(
+                knownVocabulary: AutoLearnReviewText.knownVocabulary(from: knownVocabulary),
+                candidatesForReview: candidatesForReview
+            )
         )
         let requestText = String(decoding: requestData, as: UTF8.self)
 
@@ -378,7 +404,15 @@ final class AutoLearnAIReviewer: @unchecked Sendable {
         provider: AIProvider,
         modelName: String
     ) throws -> [CandidateReviewDecision] {
-        let payload = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        if let decoded = AutoLearnReviewText.decisions(from: text) {
+            if !decoded.dropped.isEmpty {
+                logger.warning(
+                    "Auto Learn skipped \(decoded.dropped.count, privacy: .public) malformed decision(s): \(decoded.dropped.joined(separator: ","), privacy: .public)"
+                )
+            }
+            return decoded.decisions.map(CandidateReviewDecision.init)
+        }
+        let payload = AutoLearnReviewText.unwrappingCodeFence(text)
         if payload.hasPrefix("```") {
             logInvalidResponse(
                 payload,
@@ -471,5 +505,16 @@ final class AutoLearnAIReviewer: @unchecked Sendable {
 
         Allowed actions are addReplacementAndVocabulary, addReplacementOnly, addVocabularyOnly, and rejectCorrection. Copy every integer candidateID exactly and return each input candidateID at least once. Repeat an ID only for independent accepted corrections.
 
+
+        The request may include knownVocabulary: terms the user has already confirmed. A correction that turns a mis-hearing into one of these terms, or into a phrase containing one, is strong evidence of a learnable user-specific entity.
         """
+}
+
+// Kept beside the reviewer rather than in AutoLearnTypes.swift, so the pure Auto Learn
+// types compile without the app's provider model (make test-core builds them alone).
+enum AutoLearnProviderPolicy {
+    static func isSupported(_ provider: AIProvider) -> Bool {
+        provider.supportsEnhancement
+            && provider != .voiceInkRefine
+    }
 }

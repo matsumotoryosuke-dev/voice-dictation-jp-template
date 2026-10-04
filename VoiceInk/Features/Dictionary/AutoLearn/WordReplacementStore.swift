@@ -116,6 +116,11 @@ actor WordReplacementStore {
         )
     }
 
+    /// The words already in the dictionary, handed to the reviewer as context.
+    func vocabularyTerms() throws -> [String] {
+        try modelContext.fetch(FetchDescriptor<VocabularyWord>()).map(\.word)
+    }
+
     func undo(_ correction: AutoLearnAppliedCorrection) throws {
         try modelContext.transaction {
             if correction.replacementSourceWasAdded {

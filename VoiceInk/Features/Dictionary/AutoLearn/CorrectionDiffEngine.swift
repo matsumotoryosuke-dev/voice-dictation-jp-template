@@ -17,16 +17,81 @@ enum CorrectionDiffEngine {
     }
 
     private static let trailingSentencePunctuation: Set<Character> = [
-        ".", ",", "!", "?", ";", ":", "…",
+        ".", ",", "!", "?", ";", ":", "…", "。", "、", "！", "？",
     ]
     private static let leadingWrappers: Set<Character> = [
-        "\"", "“", "‘", "(", "[", "{",
+        "\"", "“", "‘", "(", "[", "{", "「", "『", "（",
     ]
+    // Full-width punctuation included: Japanese has no spaces, so without these a whole
+    // clause was one segment and a one-word fix became a 40-character candidate that the
+    // unspaced privacy limit then dropped.
     private static let structuralSeparators: Set<Character> = [
         ",", "!", "?", ";", ":", "…", "(", ")", "[", "]", "{", "}", "\"", "“", "”",
+        "、", "。", "，", "．", "！", "？", "「", "」", "『", "』", "（", "）", "【", "】",
+        "〔", "〕", "：", "；",
     ]
 
-    static func candidates(from revision: AutoLearnRevision) -> [DetectedCorrectionCandidate] {
+    /// Which writing system a character belongs to, for splitting unspaced text into
+    /// word-sized pieces. Japanese changes script at most word edges (ジェミニ|の|プロジェクト),
+    /// which is the nearest thing to a space it has.
+    private enum ScriptRun: Equatable {
+        case han, hiragana, katakana, other
+    }
+
+    private static func scriptRun(of character: Character) -> ScriptRun? {
+        guard let scalar = character.unicodeScalars.first else { return .other }
+        switch scalar.value {
+        case 0x30FC, 0xFF70, 0x3099...0x309C:
+            return nil  // ー and sound marks belong to whatever they follow (えー, データ)
+        case 0x3041...0x309F:
+            return .hiragana
+        case 0x30A0...0x30FF, 0x31F0...0x31FF, 0xFF66...0xFF9F:
+            return .katakana
+        case 0x4E00...0x9FFF, 0x3400...0x4DBF, 0xF900...0xFAFF, 0x20000...0x2FA1F, 0x3005...0x3007:
+            return .han
+        default:
+            return .other
+        }
+    }
+
+    /// The stretch that changed between two snippets, without their shared context:
+    /// ("open it in Fig ma desktop", "open it in Figma desktop") gives
+    /// ("Fig ma", "Figma"). Nil when nothing changed or one side is empty.
+    static func changedPair(original: String, corrected: String) -> (source: String, destination: String)? {
+        let originalSegments = segments(in: original.precomposedStringWithCanonicalMapping)
+        let correctedSegments = segments(in: corrected.precomposedStringWithCanonicalMapping)
+        let hunks = segmentHunks(from: originalSegments, to: correctedSegments)
+        guard let first = hunks.first, let last = hunks.last,
+            first.originalRange.lowerBound < last.originalRange.upperBound,
+            first.correctedRange.lowerBound < last.correctedRange.upperBound,
+            let source = fragment(
+                from: original.precomposedStringWithCanonicalMapping,
+                segments: originalSegments,
+                segmentRange: first.originalRange.lowerBound..<last.originalRange.upperBound
+            ),
+            let destination = fragment(
+                from: corrected.precomposedStringWithCanonicalMapping,
+                segments: correctedSegments,
+                segmentRange: first.correctedRange.lowerBound..<last.correctedRange.upperBound
+            ),
+            let pair = cleanedPair(source: source, destination: destination),
+            pair.source != pair.destination
+        else { return nil }
+        return pair
+    }
+
+    /// The segment texts the diff works on. Also used to judge whether an edited field
+    /// still holds recognisably the same text as the paste.
+    static func segmentTexts(in text: String) -> [String] {
+        segments(in: text).filter { !$0.isBoundary }.map(\.text)
+    }
+
+    /// `rejected` hears why each changed stretch was not kept, so a correction that
+    /// never reaches review can be explained from the log.
+    static func candidates(
+        from revision: AutoLearnRevision,
+        rejected: (String) -> Void = { _ in }
+    ) -> [DetectedCorrectionCandidate] {
         let original = revision.original.precomposedStringWithCanonicalMapping
         let corrected = revision.corrected.precomposedStringWithCanonicalMapping
         guard original != corrected else { return [] }
@@ -36,6 +101,7 @@ enum CorrectionDiffEngine {
         guard originalSegments.count <= AutoLearnLimits.maximumDiffSegments,
             correctedSegments.count <= AutoLearnLimits.maximumDiffSegments
         else {
+            rejected("too-many-segments")
             return []
         }
 
@@ -49,6 +115,10 @@ enum CorrectionDiffEngine {
                 hunk.originalRange.count <= AutoLearnLimits.maximumCandidateSegments,
                 hunk.correctedRange.count <= AutoLearnLimits.maximumCandidateSegments
             else {
+                rejected(
+                    hunk.originalRange.isEmpty ? "insertion-only"
+                        : hunk.correctedRange.isEmpty ? "deletion-only" : "hunk-too-long"
+                )
                 continue
             }
 
@@ -65,6 +135,7 @@ enum CorrectionDiffEngine {
                 ),
                 let pair = cleanedPair(source: source, destination: destination)
             else {
+                rejected("empty-after-cleanup")
                 continue
             }
 
@@ -93,22 +164,28 @@ enum CorrectionDiffEngine {
                     segmentRange: reviewCorrectedRange
                 )
             else {
+                rejected("no-review-context")
                 continue
             }
 
             guard pair.source != pair.destination,
                 !pair.source.contains(","),
+                !pair.source.contains("、"),
                 pair.source.count <= AutoLearnLimits.maximumCandidateCharacters,
                 pair.destination.count <= AutoLearnLimits.maximumCandidateCharacters,
                 isWithinUnspacedPrivacyLimit(pair.source, pair.destination),
                 !containsControlCharacter(pair.source),
                 !containsControlCharacter(pair.destination)
             else {
+                rejected(rejectionReason(for: pair))
                 continue
             }
 
             let deduplicationKey = pair.source + "\u{0}" + pair.destination
-            guard seen.insert(deduplicationKey).inserted else { continue }
+            guard seen.insert(deduplicationKey).inserted else {
+                rejected("duplicate")
+                continue
+            }
 
             results.append(
                 DetectedCorrectionCandidate(
@@ -120,13 +197,42 @@ enum CorrectionDiffEngine {
         return results
     }
 
+    private static func rejectionReason(for pair: (source: String, destination: String)) -> String {
+        if pair.source == pair.destination { return "unchanged" }
+        if pair.source.contains(",") || pair.source.contains("、") { return "spans-a-comma" }
+        if pair.source.count > AutoLearnLimits.maximumCandidateCharacters
+            || pair.destination.count > AutoLearnLimits.maximumCandidateCharacters
+        {
+            return "too-long"
+        }
+        if !isWithinUnspacedPrivacyLimit(pair.source, pair.destination) {
+            return "unspaced-limit(\(pair.source.count)->\(pair.destination.count))"
+        }
+        return "control-character"
+    }
+
     private static func segments(in text: String) -> [TextSegment] {
         var results: [TextSegment] = []
         var segmentStart: String.Index?
+        var currentRun: ScriptRun?
         var index = text.startIndex
 
         while index < text.endIndex {
             let character = text[index]
+            let endsSegment = character.isWhitespace || isStructuralSeparator(at: index, in: text)
+            if endsSegment {
+                currentRun = nil
+            } else if let run = scriptRun(of: character) {
+                if let start = segmentStart, let currentRun, run != currentRun {
+                    let range = start..<index
+                    results.append(
+                        TextSegment(text: String(text[range]), range: range, isBoundary: false)
+                    )
+                    segmentStart = index
+                }
+                currentRun = run
+            }
+
             if character.isWhitespace {
                 if let start = segmentStart {
                     let range = start..<index

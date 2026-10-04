@@ -502,6 +502,9 @@ final class RecordingShortcutModeHandler {
         guard activeShortcutCanCancelAccidentalStart else { return }
 
         reset()
+        // The cancelled press was never a real one, so it must not start the cooldown
+        // that would swallow a genuine tap right after the chord.
+        lastShortcutPressTime = nil
         await cancelRecording()
     }
 

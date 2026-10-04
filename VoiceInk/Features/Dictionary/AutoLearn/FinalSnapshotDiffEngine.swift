@@ -1,18 +1,33 @@
 import Foundation
 
 enum FinalSnapshotDiffEngine {
+    /// What the field says about the paste now. `lost` means the pasted stretch can no
+    /// longer be found (a chat box sent and cleared, the surrounding text was edited),
+    /// which is different from `unchanged`: the user simply has not edited it yet.
+    enum Assessment: Equatable {
+        case unchanged
+        case revised(original: String, corrected: String)
+        case lost(String)
+    }
+
     static func revision(from snapshot: AutoLearnFieldSnapshot) -> AutoLearnRevision? {
+        guard case let .revised(original, corrected) = assess(snapshot) else { return nil }
+        return AutoLearnRevision(original: original, corrected: corrected)
+    }
+
+    static func assess(_ snapshot: AutoLearnFieldSnapshot) -> Assessment {
         let baseline = snapshot.baselineFieldText as NSString
 
-        guard isValid(snapshot.pastedRange, inUTF16Length: baseline.length),
-            !textIsExactlyEqual(snapshot.baselineFieldText, snapshot.finalFieldText)
-        else {
-            return nil
+        guard isValid(snapshot.pastedRange, inUTF16Length: baseline.length) else {
+            return .lost("invalid-range")
+        }
+        guard !textIsExactlyEqual(snapshot.baselineFieldText, snapshot.finalFieldText) else {
+            return .unchanged
         }
 
         let baselinePastedText = baseline.substring(with: snapshot.pastedRange)
         guard textIsExactlyEqual(baselinePastedText, snapshot.originalPastedText) else {
-            return nil
+            return .lost("baseline-mismatch")
         }
 
         let beforeRange = NSRange(location: 0, length: snapshot.pastedRange.location)
@@ -28,7 +43,7 @@ enum FinalSnapshotDiffEngine {
             in: snapshot.finalFieldText,
             beforeText: beforeText,
             afterText: afterText
-        ) else { return nil }
+        ) else { return .lost("anchor-missing") }
         let normalizedOriginalText = AutoLearnTextNormalizer.accessibilityComparable(
             snapshot.originalPastedText
         )
@@ -36,13 +51,10 @@ enum FinalSnapshotDiffEngine {
             correctedText
         )
         guard !textIsExactlyEqual(normalizedOriginalText, normalizedCorrectedText) else {
-            return nil
+            return .unchanged
         }
 
-        return AutoLearnRevision(
-            original: normalizedOriginalText,
-            corrected: normalizedCorrectedText
-        )
+        return .revised(original: normalizedOriginalText, corrected: normalizedCorrectedText)
     }
 
     private static func correctedPastedText(

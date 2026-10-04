@@ -26,16 +26,23 @@ class TranscriptionPipeline {
     private let serviceRegistry: TranscriptionServiceRegistry
     private let enhancementService: AIEnhancementService?
     private let delivery = TranscriptionDelivery()
+    /// Local model to use when a cloud model fails, or nil when none is downloaded.
+    private let fallbackModel: () -> (any TranscriptionModel)?
+    private let isNetworkReachable: () -> Bool
     private let logger = Logger(subsystem: "com.prakashjoshipax.voiceink", category: "TranscriptionPipeline")
 
     init(
         modelContext: ModelContext,
         serviceRegistry: TranscriptionServiceRegistry,
-        enhancementService: AIEnhancementService?
+        enhancementService: AIEnhancementService?,
+        fallbackModel: @escaping () -> (any TranscriptionModel)? = { nil },
+        isNetworkReachable: @escaping () -> Bool = { true }
     ) {
         self.modelContext = modelContext
         self.serviceRegistry = serviceRegistry
         self.enhancementService = enhancementService
+        self.fallbackModel = fallbackModel
+        self.isNetworkReachable = isNetworkReachable
     }
 
     /// Run the full pipeline for a given transcription record.
@@ -101,17 +108,44 @@ class TranscriptionPipeline {
 
         do {
             let transcriptionStart = Date()
-            var text: String
-            if let session {
-                text = try await session.transcribe(audioURL: audioURL)
-            } else {
-                text = try await serviceRegistry.transcribe(
-                    audioURL: audioURL,
-                    model: model,
-                    context: transcriptionConfiguration.requestContext
-                )
-            }
-            text = TranscriptionOutputFilter.filter(text)
+            let usesCloud = Self.isCloudModel(model)
+            let outcome = try await FallbackTranscriber.transcribe(
+                primary: model,
+                primaryIsCloud: usesCloud,
+                local: usesCloud ? fallbackModel() : nil,
+                networkReachable: isNetworkReachable(),
+                transcribe: { candidate in
+                    if candidate.id == model.id {
+                        if let session {
+                            return try await session.transcribe(audioURL: audioURL)
+                        }
+                        return try await self.serviceRegistry.transcribe(
+                            audioURL: audioURL,
+                            model: model,
+                            context: transcriptionConfiguration.requestContext
+                        )
+                    }
+                    // Falling back: the cloud session is finished with, whatever state it is in.
+                    session?.cancel()
+                    return try await self.serviceRegistry.transcribe(
+                        audioURL: audioURL,
+                        model: candidate,
+                        context: transcriptionConfiguration.requestContext.scoped(to: candidate)
+                    )
+                },
+                classify: { error in
+                    TranscriptionFailureMapper.failure(for: error, networkReachable: self.isNetworkReachable())
+                },
+                willFallBack: { reason, localModel in
+                    NotificationManager.shared.showNotification(
+                        title: Self.fallbackNotice(reason, localModel: localModel),
+                        type: .warning,
+                        duration: 6.0
+                    )
+                }
+            )
+            let modelUsed = outcome.modelUsed
+            var text = TranscriptionOutputFilter.filter(outcome.text)
             let transcriptionDuration = Date().timeIntervalSince(transcriptionStart)
 
             if shouldCancel() {
@@ -120,6 +154,36 @@ class TranscriptionPipeline {
             }
 
             text = text.trimmingCharacters(in: .whitespacesAndNewlines)
+
+            if text.isEmpty {
+                // Distinguishable from a failed request, so a dead microphone is recognisable.
+                // Nothing is delivered either: pasting an empty string wipes whatever the
+                // paste path had in the clipboard and looks like the key did nothing.
+                NotificationManager.shared.showNotification(
+                    title: String(localized: "No speech detected"),
+                    type: .warning,
+                    duration: 4.0
+                )
+                transcription.text = ""
+                transcription.duration = await AudioFileMetadata.duration(for: audioURL)
+                transcription.transcriptionModelName = modelUsed.displayName
+                transcription.transcriptionStatus = TranscriptionStatus.completed.rawValue
+                DictationJournal.append(DictationJournalEntry(
+                    clipSeconds: transcription.duration,
+                    levelDecibels: AudioFileMetadata.meanLevelDecibels(for: audioURL),
+                    apiSeconds: transcriptionDuration,
+                    model: modelUsed.displayName,
+                    characters: 0,
+                    fallbackReason: outcome.fallbackReason.map { String(describing: $0) },
+                    error: "empty transcript"))
+                do {
+                    try modelContext.save()
+                } catch {
+                    logger.error("Failed to save empty transcription: \(error, privacy: .public)")
+                }
+                await onDismiss()
+                return
+            }
 
             if !assistant.isFollowUp,
                 let processedText = triggerWordModeSelection(text)
@@ -146,11 +210,20 @@ class TranscriptionPipeline {
 
             transcription.text = cleanedText
             transcription.duration = actualDuration
-            transcription.transcriptionModelName = model.displayName
+            transcription.transcriptionModelName = modelUsed.displayName
             transcription.transcriptionDuration = transcriptionDuration
             transcription.modeName = modeMetadata.name
             transcription.modeEmoji = modeMetadata.emoji
             finalText = cleanedText
+
+            DictationJournal.append(DictationJournalEntry(
+                clipSeconds: actualDuration,
+                levelDecibels: AudioFileMetadata.meanLevelDecibels(for: audioURL),
+                apiSeconds: transcriptionDuration,
+                model: modelUsed.displayName,
+                characters: cleanedText.count,
+                fallbackReason: outcome.fallbackReason.map { String(describing: $0) },
+                error: nil))
 
             if !assistant.isFollowUp {
                 let shouldRespondInRecorder =
@@ -209,10 +282,15 @@ class TranscriptionPipeline {
                         let failureMessage = EnhancementFailureFormatter.message(description: errorDescription)
                         transcription.enhancedText = failureMessage
                         responseError = errorDescription
+                        // One toast at a time: keep the fallback notice visible if there was one.
+                        let title = outcome.fallbackReason.map {
+                            Self.fallbackNotice($0, localModel: modelUsed) + "\n" + failureMessage
+                        } ?? failureMessage
                         await MainActor.run {
                             NotificationManager.shared.showNotification(
-                                title: failureMessage,
-                                type: .warning
+                                title: title,
+                                type: .warning,
+                                duration: outcome.fallbackReason == nil ? 3.0 : 6.0
                             )
                         }
                         if shouldCancel() {
@@ -225,22 +303,48 @@ class TranscriptionPipeline {
 
             transcription.transcriptionStatus = TranscriptionStatus.completed.rawValue
         } catch {
-            let errorDescription = (error as? LocalizedError)?.errorDescription ?? error.localizedDescription
+            if error is CancellationError || shouldCancel() {
+                await finishCanceledTranscription()
+                return
+            }
 
-            if let nativeAppleError = error as? NativeAppleTranscriptionService.ServiceError,
-                nativeAppleError.shouldShowNotification
-            {
+            let errorDescription = Self.failureDescription(for: error)
+
+            if let nativeAppleError = error as? NativeAppleTranscriptionService.ServiceError {
+                if nativeAppleError.shouldShowNotification {
+                    await MainActor.run {
+                        NotificationManager.shared.showNotification(
+                            title: errorDescription,
+                            type: .error,
+                            duration: 5.0
+                        )
+                    }
+                }
+            } else {
+                // Failures used to be silent here; a dictation key that quietly does nothing
+                // is worse than one that errors.
+                let isNoSpeech: Bool
+                if case FallbackTranscriptionError.noSpeech = error { isNoSpeech = true } else { isNoSpeech = false }
                 await MainActor.run {
                     NotificationManager.shared.showNotification(
                         title: errorDescription,
-                        type: .error,
-                        duration: 5.0
+                        type: isNoSpeech ? .warning : .error,
+                        duration: 6.0
                     )
                 }
             }
 
             transcription.text = String(format: String(localized: "Transcription Failed: %@"), errorDescription)
             transcription.transcriptionStatus = TranscriptionStatus.failed.rawValue
+
+            DictationJournal.append(DictationJournalEntry(
+                clipSeconds: await AudioFileMetadata.duration(for: audioURL),
+                levelDecibels: AudioFileMetadata.meanLevelDecibels(for: audioURL),
+                apiSeconds: nil,
+                model: model.displayName,
+                characters: 0,
+                fallbackReason: nil,
+                error: errorDescription))
         }
 
         func saveTranscriptionAndPostCompletion() {
@@ -302,5 +406,66 @@ class TranscriptionPipeline {
         }
 
         return (mode.name, mode.icon.value)
+    }
+}
+
+// MARK: - Cloud → local fallback
+
+extension TranscriptionPipeline {
+    static func isCloudModel(_ model: any TranscriptionModel) -> Bool {
+        switch model.provider {
+        case .whisper, .fluidAudio, .transcribeCpp, .nativeApple:
+            return false
+        default:
+            return true
+        }
+    }
+
+    /// The downloaded local model used when the cloud fails: a multilingual Whisper model,
+    /// largest first, because the speech this fork is for mixes Japanese and English.
+    static func preferredLocalFallback(from usableModels: [any TranscriptionModel]) -> (any TranscriptionModel)? {
+        let candidates = usableModels.filter { $0.provider == .whisper && $0.isMultilingualModel }
+        let preference = ["large-v3-turbo", "large-v3", "large", "medium", "small", "base", "tiny"]
+        for fragment in preference {
+            if let model = candidates.first(where: { $0.name.contains(fragment) }) {
+                return model
+            }
+        }
+        return candidates.first
+    }
+
+    static func fallbackNotice(_ reason: FallbackReason, localModel: any TranscriptionModel) -> String {
+        String(format: String(localized: "%@. Transcribed locally with %@, which is less accurate."),
+               reasonText(reason), localModel.displayName)
+    }
+
+    static func failureDescription(for error: Error) -> String {
+        switch error {
+        case FallbackTranscriptionError.noSpeech:
+            return String(localized: "No speech detected — nothing was recorded")
+        case FallbackTranscriptionError.noLocalModel(let reason, _):
+            return String(format: String(localized: "%@, and no local model is downloaded to fall back to."),
+                          reasonText(reason))
+        case FallbackTranscriptionError.localFailedAfterCloud(let reason, let underlying):
+            return String(format: String(localized: "%@, and the local model also failed: %@"),
+                          reasonText(reason), describe(underlying))
+        default:
+            return describe(error)
+        }
+    }
+
+    private static func reasonText(_ reason: FallbackReason) -> String {
+        switch reason {
+        case .emptyResult: return String(localized: "The cloud returned no text")
+        case .offline: return String(localized: "You are offline")
+        case .timeout: return String(localized: "The cloud transcription timed out")
+        case .providerUnavailable: return String(localized: "The cloud transcription service is unavailable")
+        case .keyRejected: return String(localized: "The cloud API key was rejected")
+        case .keyMissing: return String(localized: "No cloud API key is set")
+        }
+    }
+
+    private static func describe(_ error: Error) -> String {
+        (error as? LocalizedError)?.errorDescription ?? error.localizedDescription
     }
 }

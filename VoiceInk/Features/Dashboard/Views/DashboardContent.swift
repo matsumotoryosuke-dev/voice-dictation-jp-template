@@ -241,6 +241,13 @@ struct DashboardContent: View {
                 heroSection
             }
 
+            // What Soniox has charged, so the user need not open its console.
+            if SonioxUsageService.shared.hasKey {
+                nameEditorDismissArea {
+                    SonioxUsageCard()
+                }
+            }
+
             if !isAccessibilityEnabled {
                 nameEditorDismissArea {
                     accessibilityReminder

@@ -1,3 +1,4 @@
+import AppKit
 import Foundation
 import OSLog
 import SwiftData
@@ -20,6 +21,9 @@ actor AutoLearnService {
     private var activeProcessID: pid_t?
     private var deadlineTask: Task<Void, Never>?
     private var focusFinalizationTask: Task<Void, Never>?
+    private var pollTask: Task<Void, Never>?
+    private var probeInFlight = false
+    private var probeRequestedAgain = false
     private var reviewTask: Task<Void, Never>?
     private var reviewGeneration: UInt64 = 0
     private var claimedCandidateIDs = Set<UUID>()
@@ -93,7 +97,7 @@ actor AutoLearnService {
     }
 
     private func startPendingReviewForApproval() async {
-        guard await reviewer?.hasAvailableProvider == true else {
+        guard await reviewer?.ensureProviderAvailable() == true else {
             logger.notice("Manual Auto Learn review deferred: no provider available")
             return
         }
@@ -211,6 +215,12 @@ actor AutoLearnService {
         }
         lifecycleGeneration &+= 1
         await discardActiveSession()
+        // The text will be pasted into whatever app is in front now; get its
+        // accessibility tree built while the user is still speaking.
+        let frontmost = await MainActor.run { NSWorkspace.shared.frontmostApplication?.processIdentifier }
+        if let frontmost {
+            await accessibilityRuntime.prewarm(processID: frontmost)
+        }
     }
 
     func pasteDidFinish(text: String, processID: pid_t?, commandPosted: Bool) async -> UInt64? {
@@ -231,6 +241,8 @@ actor AutoLearnService {
         deadlineTask = nil
         focusFinalizationTask?.cancel()
         focusFinalizationTask = nil
+        pollTask?.cancel()
+        pollTask = nil
         focusObserver.stop()
         activeToken = nil
         activeGeneration = nil
@@ -302,15 +314,70 @@ actor AutoLearnService {
         activeToken = token
         activeGeneration = generation
         activeProcessID = processID
-        focusObserver.start(processID: processID, token: token) { token in
+        let valueElement = await accessibilityRuntime.targetElement(token: token)
+        focusObserver.start(processID: processID, token: token, valueElement: valueElement) { token, event in
             Task {
-                await AutoLearnService.shared.focusMayHaveChanged(token: token)
+                switch event {
+                case .focusChanged:
+                    await AutoLearnService.shared.focusMayHaveChanged(token: token)
+                case .valueChanged:
+                    await AutoLearnService.shared.valueMayHaveChanged(token: token)
+                }
             }
         }
+        startPolling(token: token)
         scheduleDeadline(
             token: token,
             after: AutoLearnLimits.observationDurationNanoseconds
         )
+    }
+
+    /// The field changed; read it now so the last edit before a send is not missed.
+    func valueMayHaveChanged(token: AutoLearnPasteToken) async {
+        guard AutoLearnSettings.isEnabled, activeToken == token else { return }
+        await probe(token: token)
+    }
+
+    /// A safety net for apps that never report value changes. Cheap: one read of one
+    /// field, for at most the 60-second watch.
+    private func startPolling(token: AutoLearnPasteToken) {
+        pollTask?.cancel()
+        pollTask = Task { [weak self] in
+            while !Task.isCancelled {
+                guard let self,
+                    await self.sleep(nanoseconds: 400_000_000),
+                    !Task.isCancelled
+                else { return }
+                guard await self.isActive(token: token) else { return }
+                await self.probe(token: token)
+            }
+        }
+    }
+
+    private func isActive(token: AutoLearnPasteToken) -> Bool {
+        activeToken == token
+    }
+
+    /// One read at a time; a change that arrives mid-read is read again afterwards
+    /// rather than queued once per keystroke.
+    private func probe(token: AutoLearnPasteToken) async {
+        guard !probeInFlight else {
+            probeRequestedAgain = true
+            return
+        }
+        probeInFlight = true
+        defer { probeInFlight = false }
+
+        repeat {
+            probeRequestedAgain = false
+            guard activeToken == token else { return }
+            if let reason = await accessibilityRuntime.probe(token: token) {
+                guard activeToken == token else { return }
+                logger.notice("Auto Learn paste left the field: \(reason, privacy: .public)")
+                await completeSession(token: token, persist: true)
+                return
+            }
+        } while probeRequestedAgain
     }
 
     private func discardActiveSession() async {
@@ -320,6 +387,8 @@ actor AutoLearnService {
         deadlineTask = nil
         focusFinalizationTask?.cancel()
         focusFinalizationTask = nil
+        pollTask?.cancel()
+        pollTask = nil
         focusObserver.stop()
         activeToken = nil
         activeGeneration = nil
@@ -340,6 +409,8 @@ actor AutoLearnService {
         deadlineTask = nil
         focusFinalizationTask?.cancel()
         focusFinalizationTask = nil
+        pollTask?.cancel()
+        pollTask = nil
         focusObserver.stop()
 
         if persist {
@@ -390,8 +461,15 @@ actor AutoLearnService {
             let snapshot
         else { return }
 
-        guard let revision = FinalSnapshotDiffEngine.revision(from: snapshot) else { return }
-        let candidates = CorrectionDiffEngine.candidates(from: revision)
+        guard let revision = FinalSnapshotDiffEngine.revision(from: snapshot) else {
+            logger.notice("Auto Learn kept an edit but it no longer reads as a revision")
+            return
+        }
+        var rejected: [String] = []
+        let candidates = CorrectionDiffEngine.candidates(from: revision) { rejected.append($0) }
+        logger.notice(
+            "Auto Learn edit gave candidates=\(candidates.count, privacy: .public) dropped=\(rejected.joined(separator: ","), privacy: .public)"
+        )
         guard !candidates.isEmpty else { return }
 
         do {
@@ -419,7 +497,7 @@ actor AutoLearnService {
 
         // A provider that is still starting up is not a failure. Leave the
         // candidates queued; the next paste, setting change, or retry arms it.
-        guard await reviewer?.hasAvailableProvider == true else {
+        guard await reviewer?.ensureProviderAvailable() == true else {
             logger.notice("Auto Learn review deferred: no provider available")
             return
         }
@@ -489,7 +567,8 @@ actor AutoLearnService {
         claimedCandidateIDs.formUnion(candidateIDs)
         let reviewResult: AutoLearnReviewResult
         do {
-            reviewResult = try await reviewer.review(candidates)
+            let knownVocabulary = (try? await replacementStore.vocabularyTerms()) ?? []
+            reviewResult = try await reviewer.review(candidates, knownVocabulary: knownVocabulary)
             let replacementAndVocabularyCount = reviewResult.reviewDecisions.filter {
                 $0.learningAction == .addReplacementAndVocabulary
             }.count
@@ -523,8 +602,18 @@ actor AutoLearnService {
 
         do {
             if stagesForApproval {
+                // The user sees everything the reviewer did not accept, including
+                // candidates it gave no usable decision for; they arrive unticked.
+                let undecided = reviewResult.unresolvedReviews.map {
+                    AutoLearnReviewDecision(
+                        candidateID: $0.candidateID,
+                        learningAction: .rejectCorrection,
+                        incorrectTextToReplace: nil,
+                        correctedVocabularyTerm: nil
+                    )
+                }
                 try await reviewProposalStore.append(
-                    decisions: reviewResult.reviewDecisions,
+                    decisions: reviewResult.reviewDecisions + undecided,
                     candidates: candidates
                 )
                 try await pendingQueue.remove(candidateIDs)

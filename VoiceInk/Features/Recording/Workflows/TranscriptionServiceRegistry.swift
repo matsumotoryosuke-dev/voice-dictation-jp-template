@@ -19,6 +19,10 @@ class TranscriptionServiceRegistry {
     private(set) lazy var fluidAudioTranscriptionService = FluidAudioTranscriptionService()
     private var cachedTranscribeCppTranscriptionService: TranscribeCppTranscriptionService?
 
+    /// True when a local model is downloaded and can take over from a failed stream.
+    /// Set by the engine; without it the cloud's own upload path stays as the safety net.
+    var hasLocalFallback: () -> Bool = { false }
+
     var transcribeCppTranscriptionService: TranscribeCppTranscriptionService {
         if let cachedTranscribeCppTranscriptionService {
             return cachedTranscribeCppTranscriptionService
@@ -72,7 +76,14 @@ class TranscriptionServiceRegistry {
                 onPartialTranscript: onPartialTranscript
             )
             let fallback = service(for: model.provider)
-            return StreamingTranscriptionSession(streamingService: streamingService, fallbackService: fallback)
+            // When the websocket does not finalise, uploading the file to the same cloud
+            // costs four round trips (3-8 s measured). With a local model downloaded we
+            // would rather throw here and let the pipeline run Whisper on-device, which
+            // also says on screen why the text came from the local model.
+            return StreamingTranscriptionSession(
+                streamingService: streamingService,
+                fallbackService: fallback,
+                isBatchFallbackEnabled: { [weak self] in self?.hasLocalFallback() != true })
         } else {
             return FileTranscriptionSession(service: service(for: model.provider))
         }

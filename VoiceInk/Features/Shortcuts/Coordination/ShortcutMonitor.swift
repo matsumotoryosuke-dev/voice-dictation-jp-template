@@ -32,6 +32,11 @@ final class ShortcutMonitor {
     private var onStandaloneModifierChord: ((ShortcutAction) -> Void)?
     private var eventTap: CFMachPort?
     private var eventTapRunLoopSource: CFRunLoopSource?
+    // Left/right clicks are observed on a separate listen-only tap so that no click on the
+    // Mac ever waits for this app's main thread, which the active tap above would do.
+    private var mouseEventTap: CFMachPort?
+    private var mouseEventTapRunLoopSource: CFRunLoopSource?
+    private var chordGuard = ChordGuard<ShortcutAction>(window: ShortcutMonitor.shortcutInterruptionWindow)
     private let logger = Logger(subsystem: "com.prakashjoshipax.voiceink", category: "ShortcutMonitor")
 
     private static let shortcutInterruptionWindow: TimeInterval = 1.0
@@ -85,6 +90,17 @@ final class ShortcutMonitor {
             self.eventTap = nil
         }
 
+        if let mouseEventTapRunLoopSource {
+            CFRunLoopRemoveSource(CFRunLoopGetMain(), mouseEventTapRunLoopSource, .commonModes)
+            self.mouseEventTapRunLoopSource = nil
+        }
+
+        if let mouseEventTap {
+            CFMachPortInvalidate(mouseEventTap)
+            self.mouseEventTap = nil
+        }
+
+        chordGuard.reset()
         shortcuts = [:]
         pressedKeyCodes = []
         suppressedMouseButtons = []
@@ -140,7 +156,55 @@ final class ShortcutMonitor {
         eventTapRunLoopSource = source
         CFRunLoopAddSource(CFRunLoopGetMain(), source, .commonModes)
         CGEvent.tapEnable(tap: eventTap, enable: true)
+        // Clicks only matter for held modifier-only shortcuts (chords, Toggle candidates).
+        if shortcuts.values.contains(where: { $0.shortcut.isModifierOnly }) {
+            installMouseEventTap()
+        }
         return true
+    }
+
+    /// Best effort: without it, clicks simply do not cancel an accidental start.
+    private func installMouseEventTap() {
+        let callback: CGEventTapCallBack = { _, type, event, userInfo in
+            guard let userInfo else {
+                return Unmanaged.passUnretained(event)
+            }
+
+            let monitor = Unmanaged<ShortcutMonitor>.fromOpaque(userInfo).takeUnretainedValue()
+
+            if type == .tapDisabledByTimeout || type == .tapDisabledByUserInput {
+                if let mouseEventTap = monitor.mouseEventTap {
+                    CGEvent.tapEnable(tap: mouseEventTap, enable: true)
+                }
+                return Unmanaged.passUnretained(event)
+            }
+
+            monitor.handleMouseDownForChords(eventTime: ProcessInfo.processInfo.systemUptime)
+            return Unmanaged.passUnretained(event)
+        }
+
+        let mask = (CGEventMask(1) << Int(CGEventType.leftMouseDown.rawValue))
+            | (CGEventMask(1) << Int(CGEventType.rightMouseDown.rawValue))
+
+        guard
+            let mouseEventTap = CGEvent.tapCreate(
+                tap: .cgSessionEventTap,
+                place: .tailAppendEventTap,
+                options: .listenOnly,
+                eventsOfInterest: mask,
+                callback: callback,
+                userInfo: Unmanaged.passUnretained(self).toOpaque()
+            ),
+            let source = CFMachPortCreateRunLoopSource(kCFAllocatorDefault, mouseEventTap, 0)
+        else {
+            logger.error("Failed to install listen-only mouse tap; clicks will not cancel accidental starts")
+            return
+        }
+
+        self.mouseEventTap = mouseEventTap
+        mouseEventTapRunLoopSource = source
+        CFRunLoopAddSource(CFRunLoopGetMain(), source, .commonModes)
+        CGEvent.tapEnable(tap: mouseEventTap, enable: true)
     }
 
     private func handleCGEvent(type: CGEventType, event: CGEvent) -> Bool {
@@ -192,6 +256,7 @@ final class ShortcutMonitor {
                 dispatchShortcutUp(for: action, eventTime: eventTime)
             }
         }
+        chordGuard.reset()
         pressedKeyCodes.removeAll()
     }
 
@@ -218,8 +283,26 @@ final class ShortcutMonitor {
             modifierFlags: modifierFlags
         )
 
-        if kind == .keyDown {
-            handleShortcutInterruptions(keyCode: inputCode, eventTime: eventTime)
+        switch kind {
+        case .keyDown:
+            if !Shortcut.isModifierKeyCode(inputCode) {
+                // Upstream's double-tap mode needs to hear that a modifier became part of a chord.
+                for action in standaloneModifierActions {
+                    guard shortcuts[action]?.shortcut.isModifierOnly == true else { continue }
+                    onStandaloneModifierChord?(action)
+                }
+            }
+            interruptChords(
+                .keyDown(keyCode: inputCode, isModifierKey: Shortcut.isModifierKeyCode(inputCode)),
+                eventTime: eventTime
+            )
+        case .flagsChanged:
+            let normalizedFlags = Shortcut.normalizedModifierFlags(modifierFlags, forKeyCode: inputCode)
+            interruptChords(.flagsChanged(normalizedModifiers: normalizedFlags.rawValue), eventTime: eventTime)
+        case .mouseDown:
+            handleMouseDownForChords(eventTime: eventTime)
+        case .keyUp, .mouseDragged, .mouseUp:
+            break
         }
 
         for action in Array(shortcuts.keys) {
@@ -276,6 +359,11 @@ final class ShortcutMonitor {
                 if state.shortcut.kind == .mouseButton {
                     suppressedMouseButtons.insert(inputCode)
                 }
+                if interruptibleActions.contains(action) {
+                    let kind: ChordGuard<ShortcutAction>.Kind =
+                        state.shortcut.kind == .mouseButton ? .mouseButton : .key(keyCode: state.shortcut.keyCode)
+                    chordGuard.pressed(action, kind: kind, at: eventTime)
+                }
                 shouldSuppress = true
                 dispatchShortcutDown(for: action, eventTime: eventTime)
             case .keyUp:
@@ -283,6 +371,7 @@ final class ShortcutMonitor {
                 state.pressedAt = nil
                 state.isInterrupted = false
                 shortcuts[action] = state
+                chordGuard.released(action)
                 if kind != .flagsChanged {
                     shouldSuppress = true
                 }
@@ -388,6 +477,7 @@ final class ShortcutMonitor {
                 state.isInterrupted = false
                 state.requiresStandaloneRelease = false
                 shortcuts[action] = state
+                chordGuard.released(action)
                 if shouldTrigger, let pressedAt {
                     dispatchShortcutDown(for: action, eventTime: pressedAt)
                     dispatchShortcutUp(for: action, eventTime: eventTime)
@@ -406,6 +496,13 @@ final class ShortcutMonitor {
             state.isInterrupted = state.requiresStandaloneRelease && !pressedKeyCodes.isEmpty
             shortcuts[action] = state
             if !state.requiresStandaloneRelease {
+                if interruptibleActions.contains(action) {
+                    chordGuard.pressed(
+                        action,
+                        kind: .modifierOnly(modifierMask: state.shortcut.modifierFlags.rawValue),
+                        at: eventTime
+                    )
+                }
                 dispatchShortcutDown(for: action, eventTime: eventTime)
             }
         }
@@ -452,24 +549,11 @@ final class ShortcutMonitor {
         }
     }
 
-    private func handleShortcutInterruptions(keyCode: UInt16, eventTime: TimeInterval) {
-        guard !Shortcut.isModifierKeyCode(keyCode) else {
-            return
-        }
-
-        for action in standaloneModifierActions {
-            guard shortcuts[action]?.shortcut.isModifierOnly == true else { continue }
-            onStandaloneModifierChord?(action)
-        }
-
-        for action in interruptibleActions {
-            guard var state = shortcuts[action],
-                state.isDown,
-                !state.isInterrupted,
-                let pressedAt = state.pressedAt,
-                eventTime - pressedAt <= Self.shortcutInterruptionWindow,
-                state.shortcut.isInterruptedByAdditionalKeyDown(keyCode: keyCode)
-            else {
+    /// A held shortcut that turns out to be part of a chord (Right ⌘ + C, + click, + ⇧)
+    /// is reported as interrupted so an accidental recording start can be cancelled.
+    private func interruptChords(_ event: ChordGuard<ShortcutAction>.Event, eventTime: TimeInterval) {
+        for action in chordGuard.observe(event, at: eventTime) {
+            guard interruptibleActions.contains(action), var state = shortcuts[action], state.isDown else {
                 continue
             }
 
@@ -477,6 +561,24 @@ final class ShortcutMonitor {
             shortcuts[action] = state
             dispatchShortcutInterrupted(for: action, eventTime: eventTime)
         }
+    }
+
+    private func handleMouseDownForChords(eventTime: TimeInterval) {
+        // A click also disqualifies a Toggle-mode modifier waiting for a clean release.
+        for action in Array(shortcuts.keys) {
+            guard var state = shortcuts[action],
+                state.isDown,
+                state.requiresStandaloneRelease,
+                !state.isInterrupted
+            else {
+                continue
+            }
+
+            state.isInterrupted = true
+            shortcuts[action] = state
+        }
+
+        interruptChords(.mouseDown, eventTime: eventTime)
     }
 
     private func dispatchShortcutDown(for action: ShortcutAction, eventTime: TimeInterval) {

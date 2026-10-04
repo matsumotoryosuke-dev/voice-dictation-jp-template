@@ -6,7 +6,7 @@ LOCAL_DERIVED_DATA := $(CURDIR)/.local-build
 LOCAL_CODESIGN_IDENTITY ?=
 RUN_APP_NAME ?= VoiceInk
 
-.PHONY: all clean whisper setup build local check healthcheck help dev run release release-setup
+.PHONY: all clean whisper setup build local check healthcheck help dev run release release-setup test-core
 
 # Default target
 all: check build
@@ -55,6 +55,9 @@ local: check setup
 	@echo "Building VoiceInk for local use (no Apple Developer certificate required)..."
 	@rm -rf "$(LOCAL_DERIVED_DATA)"
 	@SIGNING_IDENTITY="$(LOCAL_CODESIGN_IDENTITY)"; \
+	if [ -z "$$SIGNING_IDENTITY" ] && security find-identity -v -p codesigning 2>/dev/null | grep -q "VoiceInk Local"; then \
+		SIGNING_IDENTITY="VoiceInk Local"; \
+	fi; \
 	if [ -z "$$SIGNING_IDENTITY" ]; then \
 		SIGNING_IDENTITIES=$$(security find-identity -v -p codesigning 2>/dev/null | awk '/"Apple Development: / { print $$2 }'); \
 		SIGNING_IDENTITY_COUNT=$$(printf '%s\n' "$$SIGNING_IDENTITIES" | awk 'NF { count++ } END { print count + 0 }'); \
@@ -90,6 +93,13 @@ local: check setup
 		rm -rf "$$HOME/Downloads/VoiceInk.app"; \
 		ditto "$$APP_PATH" "$$HOME/Downloads/VoiceInk.app"; \
 		xattr -cr "$$HOME/Downloads/VoiceInk.app"; \
+		if security find-identity -v -p codesigning 2>/dev/null | grep -q "VoiceInk Local"; then \
+			ENTITLEMENTS="$(LOCAL_DERIVED_DATA)/Build/Intermediates.noindex/VoiceInk.build/Release/VoiceInk.build/VoiceInk.app.xcent"; \
+			codesign --force --deep --options runtime --timestamp=none \
+				$${ENTITLEMENTS:+--entitlements "$$ENTITLEMENTS"} \
+				--sign "VoiceInk Local" "$$HOME/Downloads/VoiceInk.app" >/dev/null 2>&1 && \
+			echo "Re-signed with the local certificate; macOS permissions survive this build."; \
+		fi; \
 		echo ""; \
 		echo "Build complete! App saved to: ~/Downloads/VoiceInk.app"; \
 		echo "Run with: open ~/Downloads/VoiceInk.app"; \
@@ -138,8 +148,21 @@ clean:
 	@echo "Clean complete"
 
 # Help
+# Unit tests for pure decision logic (Package.swift). Works with Command Line Tools only,
+# which ship Swift Testing outside the default search path.
+CLT_FRAMEWORKS := /Library/Developer/CommandLineTools/Library/Developer/Frameworks
+CLT_TESTING_LIB := /Library/Developer/CommandLineTools/Library/Developer/usr/lib
+test-core:
+	@if [ -d "$(CLT_FRAMEWORKS)" ] && ! xcode-select -p 2>/dev/null | grep -q Xcode.app; then \
+		swift test -Xswiftc -F -Xswiftc $(CLT_FRAMEWORKS) -Xlinker -F -Xlinker $(CLT_FRAMEWORKS) \
+			-Xlinker -rpath -Xlinker $(CLT_FRAMEWORKS) -Xlinker -rpath -Xlinker $(CLT_TESTING_LIB); \
+	else \
+		swift test; \
+	fi
+
 help:
 	@echo "Available targets:"
+	@echo "  test-core          Run unit tests for pure decision logic (no Xcode needed)"
 	@echo "  check/healthcheck  Check if required CLI tools are installed"
 	@echo "  whisper            Clone and build whisper.cpp XCFramework"
 	@echo "  setup              Copy whisper XCFramework to VoiceInk project"

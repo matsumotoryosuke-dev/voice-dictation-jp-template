@@ -242,7 +242,8 @@ struct AutoLearnReviewPanel: View {
             prepareDraftsAndSelections(for: loaded, selectNewItems: selectNewItems)
             selections = selections.filter { loadedIDs.contains($0.key) }
             drafts = drafts.filter { loadedIDs.contains($0.key) }
-            proposals = loaded
+            // What the AI accepted first; its rejections after, for a second look.
+            proposals = loaded.filter(\.isSelectedByDefault) + loaded.filter { !$0.isSelectedByDefault }
         } catch {
             errorMessage = error.localizedDescription
         }
@@ -285,7 +286,9 @@ struct AutoLearnReviewPanel: View {
                 drafts[proposal.id] = ReviewDraft(proposal: proposal)
             }
             if selectNewItems, selections[proposal.id] == nil {
-                selections[proposal.id] = availableComponents(for: proposal)
+                selections[proposal.id] = proposal.isSelectedByDefault
+                    ? availableComponents(for: proposal)
+                    : []
             }
         }
     }
@@ -383,6 +386,14 @@ private struct AutoLearnReviewProposalRow: View {
                 .padding(.vertical, 2)
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .help(correctionSummary)
+
+            if proposal.reviewerRejected == true {
+                Text("AI rejected")
+                    .font(.system(size: 10, weight: .medium))
+                    .foregroundStyle(AppTheme.Text.muted)
+                    .help("The AI reviewer rejected this correction. Tick it to add it anyway.")
+                    .accessibilityLabel("Rejected by the AI reviewer")
+            }
 
             HStack(spacing: 5) {
                 if proposal.addsReplacement {

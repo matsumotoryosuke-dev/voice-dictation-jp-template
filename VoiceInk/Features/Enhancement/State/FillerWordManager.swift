@@ -3,9 +3,20 @@ import Foundation
 class FillerWordManager: ObservableObject {
     static let shared = FillerWordManager()
 
-    static let defaultFillerWords = [
-        "uh", "um", "uhm", "umm", "uhh", "uhhh",
-        "hmm", "hm", "mmm", "mm", "mh", "ehh",
+    /// English hesitations, plus common Japanese ones. まあ, あの and
+    /// その are included with stricter matching (see FillerStripper); なんか is left out on
+    /// purpose, since it is too often the real word.
+    static let defaultFillerWords = FillerStripper.english + FillerStripper.japanese
+
+    /// Earlier shipped lists. A user who never edited the list gets the new defaults;
+    /// anyone who did keeps their own.
+    private static let legacyDefaults: [[String]] = [
+        // Upstream, before Japanese was handled at all.
+        ["uh", "um", "uhm", "umm", "uhh", "uhhh", "hmm", "hm", "mmm", "mm", "mh", "ehh"],
+        // Pure hesitations only, before まあ / あの / その were added.
+        ["um", "umm", "uhm", "uh", "uhh", "uhhh", "hmm", "hm", "mmm", "mm", "er", "err", "ahh",
+         "えーっと", "えーと", "えっと", "えと", "えー", "えぇ", "あのー", "あのう", "あのぉ",
+         "うーん", "うー", "うぅ", "あー", "あぁ", "んー", "んん", "そのー", "そのう"],
     ]
 
     private let fillerWordsKey = "FillerWords"
@@ -18,7 +29,7 @@ class FillerWordManager: ObservableObject {
 
     private init() {
         if let saved = UserDefaults.standard.stringArray(forKey: fillerWordsKey) {
-            self.fillerWords = saved
+            self.fillerWords = Self.legacyDefaults.contains(saved) ? Self.defaultFillerWords : saved
         } else {
             self.fillerWords = Self.defaultFillerWords
         }

@@ -35,46 +35,80 @@ final class AutoLearnAXTextReader {
     private var manualAccessibilityLastEnabledAt: [pid_t: UInt64] = [:]
     private var manualAccessibilityUnsupportedUntil: [pid_t: UInt64] = [:]
     private var manualAccessibilityPreviousValue: [pid_t: Bool] = [:]
+    private var manualAccessibilityPreviousWasUnknown: [pid_t: Bool] = [:]
 
-    func focusedReadings(processID: pid_t) -> [AutoLearnAXTextReading] {
+    /// The editable text the app has focused, with a one-line account of what was
+    /// found on the way, for the log when nothing usable comes back.
+    func focusedReadings(
+        processID: pid_t,
+        timeout: Float
+    ) -> (readings: [AutoLearnAXTextReading], detail: String) {
         let appElement = AXUIElementCreateApplication(processID)
-        AXUIElementSetMessagingTimeout(
-            appElement,
-            AutoLearnLimits.captureAccessibilityTimeoutSeconds
-        )
-        enableWebAccessibilityIfNeeded(processID: processID, appElement: appElement)
+        AXUIElementSetMessagingTimeout(appElement, timeout)
+        var detail = [enableWebAccessibilityIfNeeded(processID: processID, appElement: appElement)]
 
         var candidates: [(element: AXUIElement, source: String)] = []
         if let appFocused = copyElement(kAXFocusedUIElementAttribute as CFString, from: appElement) {
             appendUnique(appFocused, source: "application-focus", to: &candidates)
+        } else {
+            detail.append("app-focus=none")
         }
 
         let systemWide = AXUIElementCreateSystemWide()
-        if let systemFocused = copyElement(kAXFocusedUIElementAttribute as CFString, from: systemWide),
-            owningProcessID(of: systemFocused) == processID
-        {
-            appendUnique(systemFocused, source: "system-focus", to: &candidates)
+        if let systemFocused = copyElement(kAXFocusedUIElementAttribute as CFString, from: systemWide) {
+            if owningProcessID(of: systemFocused) == processID {
+                appendUnique(systemFocused, source: "system-focus", to: &candidates)
+            } else {
+                detail.append("system-focus=other-app")
+            }
+        } else {
+            detail.append("system-focus=none")
         }
 
         var readings: [AutoLearnAXTextReading] = []
         for candidate in candidates {
-            guard isEditable(candidate.element) else { continue }
+            let role = copyString(kAXRoleAttribute as CFString, from: candidate.element) ?? "?"
+            guard isEditable(candidate.element) else {
+                detail.append("\(candidate.source)=\(role)(not-editable)")
+                continue
+            }
 
             let candidateReadings = makeReadings(
                 from: candidate.element,
                 appElement: appElement,
                 focusSource: candidate.source
             )
+            detail.append("\(candidate.source)=\(role)(readings:\(candidateReadings.count))")
             readings.append(contentsOf: candidateReadings)
         }
-        if readings.isEmpty { restoreWebAccessibility(processID: processID, appElement: appElement) }
-        return readings
+        // No restore here: the first query after switching web accessibility on is what
+        // makes Chromium build its tree, so the caller retries and restores afterwards.
+        return (readings, detail.joined(separator: " "))
     }
 
-    func restoreWebAccessibility(processID: pid_t, appElement: AXUIElement) {
-        guard let previous = manualAccessibilityPreviousValue.removeValue(forKey: processID) else { return }
-        _ = AXUIElementSetAttributeValue(appElement, Self.manualAccessibilityAttribute, previous ? kCFBooleanTrue : kCFBooleanFalse)
+    /// Switches web accessibility on ahead of the paste and asks for the focused element
+    /// once, because that first query is what makes Chromium build its tree. Called
+    /// when recording starts, so the tree is ready by the time the text is pasted.
+    func prewarm(processID: pid_t, timeout: Float) -> String {
+        let appElement = AXUIElementCreateApplication(processID)
+        AXUIElementSetMessagingTimeout(appElement, timeout)
+        let detail = enableWebAccessibilityIfNeeded(processID: processID, appElement: appElement)
+        let focused = copyElement(kAXFocusedUIElementAttribute as CFString, from: appElement) != nil
+        return "\(detail) focus-now=\(focused ? "yes" : "no")"
+    }
+
+    /// Puts the app's web accessibility back how it was. Returns true when the earlier
+    /// value could not be read and was assumed off, which could switch it off under
+    /// another assistive tool; the caller logs that case.
+    @discardableResult
+    func restoreWebAccessibility(processID: pid_t, appElement: AXUIElement) -> Bool {
         manualAccessibilityLastEnabledAt.removeValue(forKey: processID)
+        let wasUnknown = manualAccessibilityPreviousWasUnknown.removeValue(forKey: processID) ?? false
+        guard let previous = manualAccessibilityPreviousValue.removeValue(forKey: processID) else {
+            return false
+        }
+        _ = AXUIElementSetAttributeValue(appElement, Self.manualAccessibilityAttribute, previous ? kCFBooleanTrue : kCFBooleanFalse)
+        return wasUnknown
     }
 
     private func isEditable(_ element: AXUIElement) -> Bool {
@@ -217,34 +251,54 @@ final class AutoLearnAXTextReader {
         )
     }
 
+    /// Electron apps (Claude, Notion, Obsidian, Slack) keep their accessibility tree
+    /// off until asked with AXManualAccessibility. Several of them accept the setting
+    /// but will not report its current value, and the upstream code gave up in that
+    /// case, so capture failed in every one of them.
     private func enableWebAccessibilityIfNeeded(
         processID: pid_t,
         appElement: AXUIElement
-    ) {
+    ) -> String {
         let now = DispatchTime.now().uptimeNanoseconds
-        if let until = manualAccessibilityUnsupportedUntil[processID], now < until { return }
+        if let until = manualAccessibilityUnsupportedUntil[processID], now < until {
+            return "manual-ax=unsupported"
+        }
         if let lastEnabledAt = manualAccessibilityLastEnabledAt[processID],
             now - lastEnabledAt < 1_000_000_000
         {
-            return
+            return "manual-ax=on"
         }
 
-        guard let previousValue = copyBool(Self.manualAccessibilityAttribute, from: appElement) else {
-            return
+        let current = copyBool(Self.manualAccessibilityAttribute, from: appElement)
+        if current == true {
+            manualAccessibilityLastEnabledAt[processID] = now
+            return "manual-ax=already-on"
         }
-        manualAccessibilityPreviousValue[processID] = previousValue
+        // Remember the value from before our first change only; a later call while it
+        // is still on must not record "on" as the value to go back to.
+        if manualAccessibilityPreviousValue[processID] == nil {
+            manualAccessibilityPreviousValue[processID] = current ?? false
+            manualAccessibilityPreviousWasUnknown[processID] = current == nil
+        }
         let result = AXUIElementSetAttributeValue(
             appElement,
             Self.manualAccessibilityAttribute,
             kCFBooleanTrue
         )
+        let read = current == nil ? "unreadable" : "off"
         switch result {
         case .success:
             manualAccessibilityLastEnabledAt[processID] = now
+            return "manual-ax=set(was:\(read))"
         case .attributeUnsupported, .notImplemented:
             manualAccessibilityUnsupportedUntil[processID] = now + 60_000_000_000
+            manualAccessibilityPreviousValue.removeValue(forKey: processID)
+            manualAccessibilityPreviousWasUnknown.removeValue(forKey: processID)
+            return "manual-ax=unsupported(\(result.rawValue))"
         default:
-            break
+            manualAccessibilityPreviousValue.removeValue(forKey: processID)
+            manualAccessibilityPreviousWasUnknown.removeValue(forKey: processID)
+            return "manual-ax=set-failed(\(result.rawValue),was:\(read))"
         }
     }
 

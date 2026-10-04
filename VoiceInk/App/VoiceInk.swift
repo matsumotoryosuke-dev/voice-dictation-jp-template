@@ -115,6 +115,12 @@ struct VoiceInkApp: App {
             )
         }
 
+        // Names taught in any tool that reads the shared vocabulary live in one file; keep the dictionary and
+        // that file in step, in both directions.
+        Task { @MainActor in
+            SharedVocabularySync.shared.start(modelContext: resolvedContainer.mainContext)
+        }
+
         // 1. Create modelsDirectory URL
         let appSupportDirectory = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
             .appendingPathComponent("com.prakashjoshipax.VoiceInk")

@@ -96,6 +96,13 @@ struct AutoLearnReviewProposal: Codable, Identifiable, Sendable {
     let learningAction: AutoLearnReviewAction
     let incorrectTextToReplace: String?
     let correctedVocabularyTerm: String?
+    /// The AI reviewer said no, but the user decides: in testing gemma4:12b accepted 3, 5
+    /// and 2 of the same 14 corrections on three runs and threw away clear brand-name fixes.
+    /// Optional so proposals saved before this field existed still load.
+    var reviewerRejected: Bool? = nil
+
+    /// Shown unticked, so applying the list as-is never adds what the reviewer refused.
+    var isSelectedByDefault: Bool { reviewerRejected != true }
 
     var addsReplacement: Bool {
         learningAction == .addReplacementAndVocabulary || learningAction == .addReplacementOnly
@@ -185,11 +192,8 @@ enum AutoLearnLimits {
     static let reviewContextSegmentsPerSide = 3
     static let maximumUnspacedCandidateCharacters = 32
     static let maximumReviewBatchCandidates = 100
-}
-
-enum AutoLearnProviderPolicy {
-    static func isSupported(_ provider: AIProvider) -> Bool {
-        provider.supportsEnhancement
-            && provider != .voiceInkRefine
-    }
+    /// The review is not the 7-second enhancement call it used to share a timeout with:
+    /// gemma4:12b needs about 4 s to load and 30 s to judge 14 corrections on an M4 Pro
+    /// Mac mini, so every Review Now failed as a timeout. It runs in the background.
+    static let reviewTimeoutSeconds: TimeInterval = 180
 }

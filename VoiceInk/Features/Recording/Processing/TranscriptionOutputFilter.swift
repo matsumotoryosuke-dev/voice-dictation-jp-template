@@ -26,15 +26,13 @@ struct TranscriptionOutputFilter {
             }
         }
 
-        // Remove configured filler words. An empty list is naturally a no-op.
-        for fillerWord in FillerWordManager.shared.fillerWords {
-            let pattern = "\\b\(NSRegularExpression.escapedPattern(for: fillerWord))\\b[,.]?"
-            if let regex = try? NSRegularExpression(pattern: pattern, options: .caseInsensitive) {
-                let range = NSRange(filteredText.startIndex..., in: filteredText)
-                filteredText = regex.stringByReplacingMatches(
-                    in: filteredText, options: [], range: range, withTemplate: "")
-            }
-        }
+        // Remove configured filler words. Japanese ones cannot use word boundaries, which
+        // is why えっと used to survive this step; FillerStripper handles both scripts.
+        let configured = FillerWordManager.shared.fillerWords
+        filteredText = FillerStripper.strip(
+            filteredText,
+            japanese: configured.filter { $0.contains { !$0.isASCII } },
+            english: configured.filter { $0.allSatisfy(\.isASCII) })
 
         // Clean whitespace
         filteredText = filteredText.replacingOccurrences(of: #"\s{2,}"#, with: " ", options: .regularExpression)

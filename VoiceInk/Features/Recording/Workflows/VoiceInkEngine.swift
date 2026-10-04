@@ -152,10 +152,22 @@ class VoiceInkEngine: NSObject, ObservableObject {
             modelsDirectory: whisperModelManager.modelsDirectory,
             modelContext: modelContext
         )
+        NetworkReachabilityMonitor.shared.start()
+        serviceRegistry.hasLocalFallback = { [weak transcriptionModelManager] in
+            transcriptionModelManager.flatMap {
+                TranscriptionPipeline.preferredLocalFallback(from: $0.usableModels)
+            } != nil
+        }
         self.pipeline = TranscriptionPipeline(
             modelContext: modelContext,
             serviceRegistry: serviceRegistry,
-            enhancementService: enhancementService
+            enhancementService: enhancementService,
+            fallbackModel: { [weak transcriptionModelManager] in
+                transcriptionModelManager.flatMap {
+                    TranscriptionPipeline.preferredLocalFallback(from: $0.usableModels)
+                }
+            },
+            isNetworkReachable: { NetworkReachabilityMonitor.shared.isReachable }
         )
 
         super.init()
@@ -895,6 +907,29 @@ class VoiceInkEngine: NSObject, ObservableObject {
 }
 
 enum AudioFileMetadata {
+    /// Average level of the recording, so a near-silent clip can be told apart from a
+    /// transcription that simply failed. Nil when the file cannot be read.
+    static func meanLevelDecibels(for url: URL) -> Double? {
+        guard let file = try? AVAudioFile(forReading: url),
+            let buffer = AVAudioPCMBuffer(pcmFormat: file.processingFormat,
+                                          frameCapacity: AVAudioFrameCount(file.length)),
+            (try? file.read(into: buffer)) != nil,
+            let samples = buffer.floatChannelData?[0]
+        else {
+            return nil
+        }
+
+        let count = Int(buffer.frameLength)
+        guard count > 0 else { return nil }
+        var sumOfSquares = 0.0
+        for index in 0..<count {
+            let sample = Double(samples[index])
+            sumOfSquares += sample * sample
+        }
+        let rms = (sumOfSquares / Double(count)).squareRoot()
+        return rms > 0 ? 20 * log10(rms) : -100
+    }
+
     static func duration(for url: URL) async -> TimeInterval {
         let asset = AVURLAsset(url: url)
         guard let duration = try? await asset.load(.duration) else { return 0 }
