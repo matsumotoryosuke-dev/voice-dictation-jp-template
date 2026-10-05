@@ -36,6 +36,13 @@ The recipient's agent should choose a route with the person, using the criteria 
 | **B. Upstream VoiceInk, settings only** | Use the official VoiceInk app or an unmodified build, and only configure it (Soniox, vocabulary, shortcut). | The person does not want to build software. They get the engine and the vocabulary, which are most of the accuracy gain, but not the fallback, the shortcut fix, the Japanese filler removal or the Auto Learn fixes. |
 | **C. Re-implement on another base** | Apply the behaviour in sections 6–7 to a different app or codebase. | The person already maintains their own dictation tool. Use sections 6–7 as the behaviour contract and section 9 as the list of traps. |
 
+### 2.1 Which version to build
+
+- **This release:** the tag `v2.21-jp.1`. Route A clones exactly that tag: `git clone --branch v2.21-jp.1 https://github.com/matsumotoryosuke-dev/voice-dictation-jp-template.git`. The `main` branch may move after the guide is written; the tag does not.
+- **The upstream it is based on:** VoiceInk commit `c09cc1f` in Beingpax/VoiceInk (2026-10-01; the app reports version 2.21).
+- **The two commit IDs are not a contradiction.** `c09cc1f` is the commit in upstream's repository. `d04a88f` is the first commit in this repository, which holds that same upstream code unchanged. `git diff d04a88f v2.21-jp.1` shows every change this template makes.
+- GitHub's "Use this template" button copies the current `main` as a single new commit, without this history or the tags. After using it, `d04a88f` does not exist in the new repository; `NOTICE.md` still lists the changes. To keep the version fixed and the history readable, clone the tag instead.
+
 **Minimum agent capability.** Route A and C need an agent that can run commands on the person's Mac (a terminal-capable coding agent). An agent limited to chat can still guide the person command by command; it must then ask the person to paste each command's output back, and must treat "it looks done" as unverified until that output is seen.
 
 ---
@@ -344,4 +351,4 @@ Each is a stop point or a reason the agent can act on.
 | Cost card | `VoiceInk/Features/Dashboard/Usage/*`, `Components/SonioxUsageCard.swift` |
 | Updates off in local builds | `VoiceInk/App/Updates/UpdaterViewModel.swift`, `App/MenuBar/MenuBarView.swift`, `Features/Settings/Views/SettingsView.swift` |
 | Unit tests | `Tests/*` (run with `make test-core`) |
-| Everything changed from upstream VoiceInk | `NOTICE.md`; `git diff d04a88f` (the unmodified upstream commit) |
+| Everything changed from upstream VoiceInk | `NOTICE.md`; `git diff d04a88f v2.21-jp.1` (`d04a88f` holds upstream `c09cc1f` unchanged; see 2.1) |
