@@ -21,6 +21,7 @@
 | **口述ごとの記録** | `~/.config/dictation/dictation-log.jsonl` に、口述の長さ・音量・どの経路で文字になったか・かかった秒数を1行ずつ残します（本文は残しません）。 |
 | **Soniox の利用額をダッシュボードに表示** | Soniox の利用 API から、今月と先月の請求額を表示します。 |
 | **自己署名の証明書でビルドを固定** | ビルドし直すたびに macOS のアクセシビリティ・マイク権限が外れる問題を避けます。 |
+| **自動アップデートを止める** | 本家の自動アップデートは公式版の VoiceInk を入れるので、このテンプレートの変更がすべて消えてしまいます。そのため、`make local` で作ったアプリでは自動アップデートを止め、「Check for Updates」も表示しません。本家の新しい変更を取り込むときは、このテンプレートの変更を新しい本家に移植してからビルドします。 |
 
 変更したファイルの一覧は [NOTICE.md](NOTICE.md)、設計の詳細は [docs/TECHNICAL_SPEC.md](docs/TECHNICAL_SPEC.md) にあります。
 
@@ -74,5 +75,6 @@ A modified [VoiceInk](https://github.com/Beingpax/VoiceInk) (GPL-3.0) tuned for 
 - Auto Learn that actually captures hand corrections in Electron apps and in chat boxes, segments Japanese correctly, survives a slow local reviewer, and shows the reviewer's rejections for you to override
 - A shared vocabulary file with two-way sync, a per-dictation journal (no text), and Soniox spend on the dashboard
 - Self-signed signing so rebuilds keep macOS permissions
+- No self-update in local builds, because upstream's updater would install the official app over this one
 
 Build with `make local`; test with `make test-core`. This is not an official VoiceInk release; the VoiceInk name and icon belong to its author.

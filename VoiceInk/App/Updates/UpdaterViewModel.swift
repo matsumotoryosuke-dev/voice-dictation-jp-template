@@ -17,6 +17,14 @@ final class UpdaterViewModel: NSObject, ObservableObject, SPUUpdaterDelegate {
         static let sparkleAutomaticChecks = "SUEnableAutomaticChecks"
     }
 
+    // A `make local` build of this fork must never update itself: the feed is the official
+    // VoiceInk's, and installing from it replaces every change in this fork.
+    #if LOCAL_BUILD
+        static let isEnabled = false
+    #else
+        static let isEnabled = true
+    #endif
+
     private let defaults: UserDefaults
     private var isUserInitiatedUpdateCheck = false
     private lazy var updaterController = SPUStandardUpdaterController(
@@ -32,8 +40,10 @@ final class UpdaterViewModel: NSObject, ObservableObject, SPUUpdaterDelegate {
     override init() {
         let defaults = UserDefaults.standard
         self.defaults = defaults
-        checksForUpdatesWhenDashboardAppears = Self.initialAutomaticCheckPreference(in: defaults)
+        checksForUpdatesWhenDashboardAppears =
+            Self.isEnabled && Self.initialAutomaticCheckPreference(in: defaults)
         super.init()
+        guard Self.isEnabled else { return }
 
         let updater = updaterController.updater
 
@@ -49,7 +59,7 @@ final class UpdaterViewModel: NSObject, ObservableObject, SPUUpdaterDelegate {
     }
 
     func setChecksForUpdatesWhenDashboardAppears(_ value: Bool) {
-        guard checksForUpdatesWhenDashboardAppears != value else { return }
+        guard Self.isEnabled, checksForUpdatesWhenDashboardAppears != value else { return }
 
         checksForUpdatesWhenDashboardAppears = value
         defaults.set(value, forKey: DefaultsKey.automaticUpdateChecks)
@@ -156,7 +166,9 @@ struct CheckForUpdatesView: View {
     @ObservedObject var updaterViewModel: UpdaterViewModel
 
     var body: some View {
-        Button("Check for Updates…", action: updaterViewModel.checkForUpdates)
-            .disabled(!updaterViewModel.canCheckForUpdates)
+        if UpdaterViewModel.isEnabled {
+            Button("Check for Updates…", action: updaterViewModel.checkForUpdates)
+                .disabled(!updaterViewModel.canCheckForUpdates)
+        }
     }
 }

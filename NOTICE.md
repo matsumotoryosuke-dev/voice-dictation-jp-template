@@ -2,9 +2,9 @@
 
 This repository is a modified version of **VoiceInk** by Beingpax (https://github.com/Beingpax/VoiceInk), taken at upstream commit `c09cc1f` (2026-10-01) and distributed under the GNU General Public License v3.0 (see `LICENSE`).
 
-As required by section 5(a) of the GPL, the files below were added or modified relative to that upstream commit. The modifications are dated 2026-09-18 to 2026-10-04. `README.md` was replaced, and the original README is kept unchanged at `docs/UPSTREAM-README.md`.
+As required by section 5(a) of the GPL, the files below were added or modified relative to that upstream commit. The modifications are dated 2026-09-18 to 2026-10-05. `README.md` was replaced, and the original README is kept unchanged at `docs/UPSTREAM-README.md`.
 
-The second commit in this repository contains exactly these changes, so `git diff HEAD~1` shows them.
+The first commit in this repository (`d04a88f`) is the unmodified upstream, so `git diff d04a88f` shows exactly these changes.
 
 - `Makefile` (modified)
 - `Package.swift` (added)
@@ -19,6 +19,8 @@ The second commit in this repository contains exactly these changes, so `git dif
 - `Tests/RecordingCoreTests/TranscriptionFallbackPolicy.boss.test.swift` (added)
 - `Tests/ShortcutCoreTests/ChordGuard.boss.test.swift` (added)
 - `Tests/UsageCoreTests/SonioxUsage.boss.test.swift` (added)
+- `VoiceInk/App/MenuBar/MenuBarView.swift` (modified)
+- `VoiceInk/App/Updates/UpdaterViewModel.swift` (modified)
 - `VoiceInk/App/VoiceInk.swift` (modified)
 - `VoiceInk/Features/Dashboard/Components/SonioxUsageCard.swift` (added)
 - `VoiceInk/Features/Dashboard/Usage/SonioxUsage.swift` (added)
@@ -53,10 +55,12 @@ The second commit in this repository contains exactly these changes, so `git dif
 - `VoiceInk/Features/Recording/Workflows/TranscriptionServiceRegistry.swift` (modified)
 - `VoiceInk/Features/Recording/Workflows/TranscriptionSession.swift` (modified)
 - `VoiceInk/Features/Recording/Workflows/VoiceInkEngine.swift` (modified)
+- `VoiceInk/Features/Settings/Views/SettingsView.swift` (modified)
 - `VoiceInk/Features/Shortcuts/Coordination/RecordingShortcutManager.swift` (modified)
 - `VoiceInk/Features/Shortcuts/Coordination/ShortcutMonitor.swift` (modified)
 - `VoiceInk/Features/Shortcuts/Core/ChordGuard.swift` (added)
 - `VoiceInk/Infrastructure/SystemIntegration/Network/NetworkReachabilityMonitor.swift` (added)
+- `LICENSE` (upstream's shortened text replaced with the full GPL-3.0 text)
 - `README.md` (replaced)
 - `NOTICE.md` (added)
 - `docs/TECHNICAL_SPEC.md` (added)

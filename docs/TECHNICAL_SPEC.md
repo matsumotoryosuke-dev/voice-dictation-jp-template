@@ -1,6 +1,6 @@
 # Technical specification: mixed Japanese–English dictation for macOS
 
-**Version:** 2026-10-04
+**Version:** 2026-10-05
 **Applies to:** this repository (a modified VoiceInk, GPL-3.0)
 **Written for:** two readers. First, the author of a step-by-step build guide (the "roadmap writer"), who turns this into instructions a viewer hands to their own coding agent. Second, that coding agent itself, which builds the app inside an environment nobody here has seen.
 
@@ -257,6 +257,12 @@ One JSON line per dictation in `~/.config/dictation/dictation-log.jsonl`. The jo
 
 If the repository sits in an iCloud-synced folder (Desktop or Documents with iCloud Drive), builds may fail with "modified during the build", and code signing may fail on extended attributes. Build from a folder outside iCloud.
 
+### 7.3 Updates are off in local builds
+
+- Upstream VoiceInk updates itself through Sparkle from the official feed (`SUFeedURL` in `Info.plist`). That feed's update is signed with the official EdDSA key, which this fork also carries (`SUPublicEDKey`). Sparkle's rules allow the code-signing identity to change while the EdDSA key stays the same, so Sparkle would accept the official app, install it over this build and remove every change listed in `NOTICE.md`. This was not tested by installing it.
+- A `make local` build therefore never starts the updater, and the "Check for Updates" items in the app menu, the menu bar and Settings are hidden (`UpdaterViewModel.isEnabled`, false under `LOCAL_BUILD`).
+- To take upstream's later changes, port this fork's diff onto the newer upstream (route C in section 2) and rebuild.
+
 ---
 
 ## 8. Measurements, for expectations only
@@ -297,6 +303,7 @@ Each is a stop point or a reason the agent can act on.
 10. **Ollama's default context window** reserved 19 GB on a 24 GB Mac (6.6). Fix the window.
 11. **Login order:** the app started before Ollama and never looked again (6.6).
 12. **An imitation of a tool's settings gave misleading results.** The tool's own code, run on the same audio, gave the real ones. Measure the real thing.
+13. **The fork kept upstream's self-updater.** One click on the dashboard's update button would have replaced the fork with the official app (7.3). When forking an app, look for anything that fetches and installs code from the original's servers.
 
 ---
 
@@ -309,6 +316,7 @@ Each is a stop point or a reason the agent can act on.
 - Never state that permissions survived an install without the check in 7.1.
 - Never add features nobody asked for. In particular, do not add an LLM clean-up pass (section 8) or extra replacement rules the person did not approve.
 - Never describe this repository as official VoiceInk.
+- Never turn the updater back on in a local build (7.3).
 
 ---
 
@@ -334,5 +342,6 @@ Each is a stop point or a reason the agent can act on.
 | Auto Learn | `VoiceInk/Features/Dictionary/AutoLearn/*` |
 | Journal | `VoiceInk/Features/Recording/Core/DictationJournal.swift` |
 | Cost card | `VoiceInk/Features/Dashboard/Usage/*`, `Components/SonioxUsageCard.swift` |
+| Updates off in local builds | `VoiceInk/App/Updates/UpdaterViewModel.swift`, `App/MenuBar/MenuBarView.swift`, `Features/Settings/Views/SettingsView.swift` |
 | Unit tests | `Tests/*` (run with `make test-core`) |
-| Everything changed from upstream VoiceInk | `NOTICE.md`; `git diff HEAD~1` |
+| Everything changed from upstream VoiceInk | `NOTICE.md`; `git diff d04a88f` (the unmodified upstream commit) |
