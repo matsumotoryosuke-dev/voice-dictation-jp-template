@@ -86,6 +86,26 @@ struct AutoLearnUnresolvedReview: Sendable {
 struct AutoLearnReviewResult: Sendable {
     let reviewDecisions: [AutoLearnReviewDecision]
     let unresolvedReviews: [AutoLearnUnresolvedReview]
+
+    /// Corrections the AI gave no decision for, even after its retry. They go back to the
+    /// queue and are never shown as rejected.
+    var undecidedCandidateIDs: Set<UUID> {
+        Set(unresolvedReviews.filter { $0.reason == .missingDecision }.map(\.candidateID))
+    }
+}
+
+/// The Auto Learn warning when a review left corrections without a decision.
+struct AutoLearnUndecidedReviewError: LocalizedError, Equatable {
+    let undecidedCount: Int
+    let candidateCount: Int
+
+    var errorDescription: String? {
+        String(localized: "The AI did not return a decision for \(undecidedCount) of \(candidateCount) corrections.")
+    }
+
+    var recoverySuggestion: String? {
+        String(localized: "They are still waiting for review and were not marked as rejected. Select Review Now to try again.")
+    }
 }
 
 struct AutoLearnReviewProposal: Codable, Identifiable, Sendable {

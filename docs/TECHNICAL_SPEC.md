@@ -1,6 +1,6 @@
 # Technical specification: mixed Japanese–English dictation for macOS
 
-**Version:** 2026-10-05
+**Version:** 2026-10-06
 **Applies to:** this repository (a modified VoiceInk, GPL-3.0)
 **Written for:** two readers. First, the author of a step-by-step build guide (the "roadmap writer"), who turns this into instructions a viewer hands to their own coding agent. Second, that coding agent itself, which builds the app inside an environment nobody here has seen.
 
@@ -204,8 +204,10 @@ Applied to the final text before pasting. The person can edit the list in Settin
 - Candidates queue on disk and are judged by an AI reviewer through the app's AI-provider settings. A local Ollama model keeps corrections on the Mac.
 - **Review timeout: 180 s.** It must not share the 7 s timeout of the app's text-enhancement feature. On the test Mac the model needed about 4 s to load and 30 s to judge 14 corrections *(measured on one Mac)*.
 - The request includes the person's existing vocabulary (`knownVocabulary`). Given it, the reviewer accepted corrections toward known brand names it had otherwise rejected *(measured on one Mac, one run)*.
-- The reviewer's answer is read **one decision at a time**. A single surrounding markdown code fence is removed; missing null fields and extra keys are tolerated; a malformed decision is skipped and logged by kind. Only an answer that is not a JSON array counts as a failure, and then the candidates stay queued for a retry.
-- **The reviewer is unreliable.** On the same 14 corrections, three runs accepted 3, 5 and 2 *(measured on one Mac)*. In manual review, rejected and undecided corrections are therefore listed too, unticked and marked "AI rejected", with the changed words taken from the diff. Applying the list unchanged adds only what the reviewer accepted.
+- The reviewer's answer is read **one decision at a time**. A single surrounding markdown code fence is removed; missing null fields and extra keys are tolerated; a malformed decision is skipped and logged by kind.
+- **Every correction sent must get a decision.** When the answer leaves some out (an empty list, a short list, decisions whose ID matches no correction sent, or an answer that is not a JSON array at all), the app asks once more about only those corrections, under the same IDs. Corrections still without a decision after that are **not** treated as rejected: they go back to the queue, and the app raises the Auto Learn warning, "The AI did not return a decision for N of M corrections." The review panel then shows that message instead of "No Corrections to Review". A timeout or network error fails the review as before, with every correction left queued.
+- **The reviewer is unreliable.** On the same 14 corrections, three runs accepted 3, 5 and 2 *(measured on one Mac)*. In manual review, rejected corrections, and those whose decision could not be applied as given, are therefore listed too, unticked and marked "AI rejected", with the changed words taken from the diff. Applying the list unchanged adds only what the reviewer accepted.
+- When the list holds corrections and the reviewer accepted none of them, a line above the list reads "The AI accepted none of these corrections. Check each one before you dismiss them.", so "Dismiss All" is not pressed on the reviewer's word alone.
 - Before reporting "no provider", the app asks Ollama again. At login VoiceInk can start before Ollama does and would otherwise treat Ollama as absent all day.
 
 **Ollama settings that matter:**

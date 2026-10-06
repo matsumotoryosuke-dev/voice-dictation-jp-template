@@ -128,47 +128,47 @@ final class AutoLearnAIReviewer: @unchecked Sendable {
         }
         let modelName = AutoLearnSettings.selectedModel ?? aiService.selectedModel(for: provider)
 
-        let candidatesForReview = candidates.enumerated().map { index, candidate in
-            AutoLearnReviewRequest.CandidateForReview(
-                candidateID: index,
-                originalText: candidate.originalText,
-                correctedText: candidate.correctedText
-            )
-        }
-        let requestData = try JSONEncoder().encode(
-            AutoLearnReviewRequest(
-                knownVocabulary: AutoLearnReviewText.knownVocabulary(from: knownVocabulary),
-                candidatesForReview: candidatesForReview
-            )
-        )
-        let requestText = String(decoding: requestData, as: UTF8.self)
-
+        let vocabulary = AutoLearnReviewText.knownVocabulary(from: knownVocabulary)
         let loggedModelName = modelName ?? "provider-default"
         logger.notice(
             "Auto Learn review started provider=\(provider.rawValue, privacy: .public) model=\(loggedModelName, privacy: .public) candidates=\(candidates.count, privacy: .public)"
         )
-        let responseText = try await aiService.reviewAutoLearnCandidates(
-            payload: requestText,
-            systemPrompt: Self.reviewPrompt,
-            provider: provider,
-            modelName: modelName
-        )
-        let candidateReviewDecisions = try decodeResponse(
-            responseText,
-            provider: provider,
-            modelName: loggedModelName
-        )
-        let expectedCandidateIDs = Set(candidates.indices)
+        // The retry asks only about the corrections still missing a decision, under the
+        // same IDs, so its decisions merge with the first answer's.
+        let outcome = try await AutoLearnReviewText.reviewWithOneRetry(
+            candidateCount: candidates.count
+        ) { indices in
+            let requestData = try JSONEncoder().encode(
+                AutoLearnReviewRequest(
+                    knownVocabulary: vocabulary,
+                    candidatesForReview: indices.map { index in
+                        AutoLearnReviewRequest.CandidateForReview(
+                            candidateID: index,
+                            originalText: candidates[index].originalText,
+                            correctedText: candidates[index].correctedText
+                        )
+                    }
+                )
+            )
+            let responseText = try await aiService.reviewAutoLearnCandidates(
+                payload: String(decoding: requestData, as: UTF8.self),
+                systemPrompt: Self.reviewPrompt,
+                provider: provider,
+                modelName: modelName
+            )
+            logAnswerProblems(responseText, provider: provider, modelName: loggedModelName)
+            return responseText
+        }
+        if outcome.retried {
+            logger.notice(
+                "Auto Learn review asked again for corrections without a decision; still undecided=\(outcome.undecided.count, privacy: .public)"
+            )
+        }
+        let candidateReviewDecisions = outcome.decisions.map(CandidateReviewDecision.init)
         let decisionsByCandidateID = Dictionary(grouping: candidateReviewDecisions) {
             $0.candidateID
         }
         let correctedContexts = candidates.map(\.correctedText)
-        for unknownCandidateID in decisionsByCandidateID.keys
-        where !expectedCandidateIDs.contains(unknownCandidateID) {
-            logger.warning(
-                "Ignoring Auto Learn decision with unknown candidate ID=\(unknownCandidateID, privacy: .public)"
-            )
-        }
 
         var reviewDecisions: [AutoLearnReviewDecision] = []
         var unresolvedReviews: [AutoLearnUnresolvedReview] = []
@@ -399,45 +399,30 @@ final class AutoLearnAIReviewer: @unchecked Sendable {
         return assign(0, occupied: [])
     }
 
-    private func decodeResponse(
-        _ text: String,
-        provider: AIProvider,
-        modelName: String
-    ) throws -> [CandidateReviewDecision] {
+    /// Logs what was wrong with an answer. An unreadable answer is no longer an error by
+    /// itself: its corrections count as undecided, get one retry, and then stay queued.
+    private func logAnswerProblems(_ text: String, provider: AIProvider, modelName: String) {
         if let decoded = AutoLearnReviewText.decisions(from: text) {
             if !decoded.dropped.isEmpty {
                 logger.warning(
                     "Auto Learn skipped \(decoded.dropped.count, privacy: .public) malformed decision(s): \(decoded.dropped.joined(separator: ","), privacy: .public)"
                 )
             }
-            return decoded.decisions.map(CandidateReviewDecision.init)
+            return
         }
         let payload = AutoLearnReviewText.unwrappingCodeFence(text)
         if payload.hasPrefix("```") {
-            logInvalidResponse(
-                payload,
-                provider: provider,
-                modelName: modelName,
-                reason: "markdown-code-fence"
-            )
-            throw ReviewError.invalidResponse
+            logInvalidResponse(payload, provider: provider, modelName: modelName, reason: "markdown-code-fence")
+            return
         }
-
-        let data = Data(payload.utf8)
-
-        do {
-            return try JSONDecoder().decode([CandidateReviewDecision].self, from: data)
-        } catch {
-            let diagnostic = invalidResponseDiagnostic(for: data)
-            logInvalidResponse(
-                payload,
-                provider: provider,
-                modelName: modelName,
-                reason: diagnostic.reason,
-                shape: diagnostic.shape
-            )
-            throw ReviewError.invalidResponse
-        }
+        let diagnostic = invalidResponseDiagnostic(for: Data(payload.utf8))
+        logInvalidResponse(
+            payload,
+            provider: provider,
+            modelName: modelName,
+            reason: diagnostic.reason,
+            shape: diagnostic.shape
+        )
     }
 
     private func logInvalidResponse(

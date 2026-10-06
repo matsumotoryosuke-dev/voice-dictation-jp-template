@@ -45,7 +45,9 @@ struct AutoLearnReviewPanel: View {
 
     @ViewBuilder
     private var reviewContent: some View {
-        if proposals.isEmpty, !isReviewing {
+        // With corrections still waiting, "No Corrections to Review" would be false; the list
+        // shows the error line instead.
+        if proposals.isEmpty, !isReviewing, errorMessage == nil {
             emptyState
         } else {
             reviewList
@@ -103,6 +105,17 @@ struct AutoLearnReviewPanel: View {
                         .foregroundStyle(AppTheme.Status.error)
                         .frame(maxWidth: .infinity, alignment: .leading)
                         .padding(.horizontal, 2)
+                }
+
+                if !isReviewing, AutoLearnReviewText.acceptedNone(proposals) {
+                    Label(
+                        "The AI accepted none of these corrections. Check each one before you dismiss them.",
+                        systemImage: "exclamationmark.triangle.fill"
+                    )
+                    .font(.system(size: 11, weight: .medium))
+                    .foregroundStyle(AppTheme.Status.warningStrong)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .padding(.horizontal, 2)
                 }
 
                 ForEach(proposals) { proposal in
@@ -228,9 +241,15 @@ struct AutoLearnReviewPanel: View {
 
         let pendingCount = (try? await AutoLearnService.shared.pendingReviewCount()) ?? 0
         if pendingCount > 0, errorMessage == nil {
-            errorMessage = String(
-                localized: "Some corrections could not be reviewed. Check the selected AI provider and try again."
-            )
+            // The recorded warning says why, for example how many got no decision.
+            let defaults = UserDefaults.standard
+            let recorded = defaults.bool(forKey: AutoLearnSettings.hasFailureKey)
+                ? defaults.string(forKey: AutoLearnSettings.failureMessageKey) : nil
+            errorMessage = recorded?.isEmpty == false
+                ? recorded
+                : String(
+                    localized: "Some corrections could not be reviewed. Check the selected AI provider and try again."
+                )
         }
     }
 

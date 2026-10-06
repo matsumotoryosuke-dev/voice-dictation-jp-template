@@ -2,7 +2,7 @@
 
 This repository is a modified version of **VoiceInk** by Beingpax (https://github.com/Beingpax/VoiceInk), taken at upstream commit `c09cc1f` (2026-10-01) and distributed under the GNU General Public License v3.0 (see `LICENSE`).
 
-As required by section 5(a) of the GPL, the files below were added or modified relative to that upstream commit. The modifications are dated 2026-09-18 to 2026-10-05. `README.md` was replaced, and the original README is kept unchanged at `docs/UPSTREAM-README.md`.
+As required by section 5(a) of the GPL, the files below were added or modified relative to that upstream commit. The modifications are dated 2026-09-18 to 2026-10-06. `README.md` was replaced, and the original README is kept unchanged at `docs/UPSTREAM-README.md`.
 
 The first commit in this repository (`d04a88f`) holds upstream `c09cc1f` unchanged, so `git diff d04a88f v2.21-jp.1` shows exactly these changes for the release tagged `v2.21-jp.1`.
 
@@ -11,6 +11,7 @@ The first commit in this repository (`d04a88f`) holds upstream `c09cc1f` unchang
 - `Tests/AutoLearnCoreTests/AutoLearnReviewText.boss.test.swift` (added)
 - `Tests/AutoLearnCoreTests/AutoLearnText.boss.test.swift` (added)
 - `Tests/AutoLearnCoreTests/RejectedProposals.boss.test.swift` (added)
+- `Tests/AutoLearnCoreTests/UndecidedReview.boss.test.swift` (added)
 - `Tests/DictionaryCoreTests/SharedVocabularyFile.boss.test.swift` (added)
 - `Tests/DictionaryCoreTests/VocabularyPlan.boss.test.swift` (added)
 - `Tests/RecordingCoreTests/DictationJournal.boss.test.swift` (added)

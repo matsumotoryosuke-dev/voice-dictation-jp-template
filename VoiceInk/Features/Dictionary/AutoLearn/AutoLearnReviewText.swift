@@ -68,6 +68,55 @@ enum AutoLearnReviewText {
         return (decisions, dropped)
     }
 
+    /// What a review produced once its single retry is spent.
+    struct Outcome: Equatable {
+        /// Every usable decision, keyed to the candidate's index in the batch.
+        let decisions: [Decision]
+        /// Indices still without a decision. They stay queued; they are not rejections.
+        let undecided: [Int]
+        let retried: Bool
+    }
+
+    /// Asks for a decision on every candidate, then asks once more about the ones the answer
+    /// left out: an empty list, a short list, IDs that match no candidate, or an answer that
+    /// is not a list at all. An answer that leaves corrections out used to put them in the
+    /// review list as "AI rejected", which reads as a verdict the AI never gave.
+    static func reviewWithOneRetry(
+        candidateCount: Int,
+        ask: ([Int]) async throws -> String
+    ) async throws -> Outcome {
+        let everyCandidate = Array(0..<candidateCount)
+        let first = usableDecisions(from: try await ask(everyCandidate), asked: everyCandidate)
+        let missing = undecidedIndices(first, asked: everyCandidate)
+        guard !missing.isEmpty else {
+            return Outcome(decisions: first, undecided: [], retried: false)
+        }
+        let second = usableDecisions(from: try await ask(missing), asked: missing)
+        return Outcome(
+            decisions: first + second,
+            undecided: undecidedIndices(second, asked: missing),
+            retried: true
+        )
+    }
+
+    /// Decisions about a candidate that was asked about; any other ID matches nothing.
+    static func usableDecisions(from text: String, asked: [Int]) -> [Decision] {
+        let askedIDs = Set(asked)
+        return (decisions(from: text)?.decisions ?? []).filter { askedIDs.contains($0.candidateID) }
+    }
+
+    /// The asked candidates that no decision names, in the order asked.
+    static func undecidedIndices(_ decisions: [Decision], asked: [Int]) -> [Int] {
+        let named = Set(decisions.map(\.candidateID))
+        return asked.filter { !named.contains($0) }
+    }
+
+    /// True when the review list holds corrections and the AI accepted none of them, so the
+    /// panel can warn before "Dismiss All" throws away fixes the AI was wrong about.
+    static func acceptedNone(_ proposals: [AutoLearnReviewProposal]) -> Bool {
+        !proposals.isEmpty && proposals.allSatisfy { !$0.isSelectedByDefault }
+    }
+
     /// Terms the user has already confirmed, for the reviewer to recognise its own
     /// vocabulary. In testing, gemma4:12b rejected corrections toward a brand name that was
     /// already in the dictionary; given the vocabulary it accepted them and added nothing

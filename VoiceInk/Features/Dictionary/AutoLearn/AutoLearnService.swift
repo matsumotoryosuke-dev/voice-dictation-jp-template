@@ -27,6 +27,10 @@ actor AutoLearnService {
     private var reviewTask: Task<Void, Never>?
     private var reviewGeneration: UInt64 = 0
     private var claimedCandidateIDs = Set<UUID>()
+    /// Across one review run, which may take several batches: corrections sent, and those
+    /// the AI left without a decision. A later clean batch must not clear an earlier gap.
+    private var reviewedInCurrentRun = 0
+    private var undecidedInCurrentRun = 0
     private var providerAvailabilityObserver: NSObjectProtocol?
 
     private init() {}
@@ -105,6 +109,7 @@ actor AutoLearnService {
 
         reviewGeneration &+= 1
         let generation = reviewGeneration
+        startReviewRun()
         reviewTask = Task { [weak self] in
             await self?.processPendingReviewBatch(
                 generation: generation,
@@ -520,9 +525,30 @@ actor AutoLearnService {
         logger.notice(
             "Auto Learn review started schedule=\(schedule.rawValue, privacy: .public) pending=\(pendingCandidateCount, privacy: .public)"
         )
+        startReviewRun()
         reviewTask = Task { [weak self] in
             await self?.processPendingReviewBatch(generation: generation)
         }
+    }
+
+    private func startReviewRun() {
+        reviewedInCurrentRun = 0
+        undecidedInCurrentRun = 0
+    }
+
+    /// The warning after a batch: cleared only when every correction in the run so far got a
+    /// decision; otherwise it says how many are still waiting.
+    private func settleFailureAfterBatch() {
+        guard undecidedInCurrentRun > 0 else {
+            AutoLearnSettings.clearFailure()
+            return
+        }
+        AutoLearnSettings.recordFailure(
+            AutoLearnUndecidedReviewError(
+                undecidedCount: undecidedInCurrentRun,
+                candidateCount: reviewedInCurrentRun
+            )
+        )
     }
 
     private func processPendingReviewBatch(
@@ -582,7 +608,7 @@ actor AutoLearnService {
                 $0.learningAction == .rejectCorrection
             }.count
             logger.notice(
-                "Auto Learn review completed replacementAndVocabulary=\(replacementAndVocabularyCount, privacy: .public) replacementOnly=\(replacementOnlyCount, privacy: .public) vocabularyOnly=\(vocabularyOnlyCount, privacy: .public) rejected=\(rejectedCount, privacy: .public) discarded=\(reviewResult.unresolvedReviews.count, privacy: .public)"
+                "Auto Learn review completed replacementAndVocabulary=\(replacementAndVocabularyCount, privacy: .public) replacementOnly=\(replacementOnlyCount, privacy: .public) vocabularyOnly=\(vocabularyOnlyCount, privacy: .public) rejected=\(rejectedCount, privacy: .public) discarded=\(reviewResult.unresolvedReviews.count, privacy: .public) undecided=\(reviewResult.undecidedCandidateIDs.count, privacy: .public)"
             )
         } catch {
             try? await releaseAllClaimsToQueue()
@@ -600,27 +626,38 @@ actor AutoLearnService {
             return
         }
 
+        // Corrections the AI gave no decision for, even after its retry, stay claimed until
+        // the run ends and then return to the queue, so this run does not ask about them a
+        // third time.
+        let undecidedIDs = reviewResult.undecidedCandidateIDs
+        let decidedIDs = candidateIDs.subtracting(undecidedIDs)
+        reviewedInCurrentRun += candidates.count
+        undecidedInCurrentRun += undecidedIDs.count
+
         do {
             if stagesForApproval {
-                // The user sees everything the reviewer did not accept, including
-                // candidates it gave no usable decision for; they arrive unticked.
-                let undecided = reviewResult.unresolvedReviews.map {
-                    AutoLearnReviewDecision(
-                        candidateID: $0.candidateID,
-                        learningAction: .rejectCorrection,
-                        incorrectTextToReplace: nil,
-                        correctedVocabularyTerm: nil
-                    )
-                }
+                // Arrive unticked: what the reviewer decided against, and decisions that
+                // could not be applied as given. Undecided corrections are not shown as
+                // rejected; they raise the warning instead.
+                let unusable = reviewResult.unresolvedReviews
+                    .filter { !undecidedIDs.contains($0.candidateID) }
+                    .map {
+                        AutoLearnReviewDecision(
+                            candidateID: $0.candidateID,
+                            learningAction: .rejectCorrection,
+                            incorrectTextToReplace: nil,
+                            correctedVocabularyTerm: nil
+                        )
+                    }
                 try await reviewProposalStore.append(
-                    decisions: reviewResult.reviewDecisions + undecided,
+                    decisions: reviewResult.reviewDecisions + unusable,
                     candidates: candidates
                 )
-                try await pendingQueue.remove(candidateIDs)
-                releaseClaim(candidateIDs)
+                try await pendingQueue.remove(decidedIDs)
+                releaseClaim(decidedIDs)
                 await notifyQueueChanged()
                 await notifyReviewProposalsChanged()
-                AutoLearnSettings.clearFailure()
+                settleFailureAfterBatch()
 
                 if try await pendingQueue.pendingCount() > 0 {
                     await processPendingReviewBatch(
@@ -640,12 +677,12 @@ actor AutoLearnService {
                 reviewResult.reviewDecisions,
                 candidates: candidates
             )
-            try await pendingQueue.remove(candidateIDs)
-            releaseClaim(candidateIDs)
+            try await pendingQueue.remove(decidedIDs)
+            releaseClaim(decidedIDs)
             await notifyQueueChanged()
-            // Cleared only after the queue and dictionary are consistent, so a
+            // Settled only after the queue and dictionary are consistent, so a
             // failure in this block still surfaces to the user.
-            AutoLearnSettings.clearFailure()
+            settleFailureAfterBatch()
             if summary.hasChanges {
                 logger.notice(
                     "Auto Learn apply completed replacementsCreated=\(summary.createdCount, privacy: .public) replacementsUpdated=\(summary.updatedCount, privacy: .public) vocabularyCreated=\(summary.vocabularyCount, privacy: .public)"
