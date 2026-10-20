@@ -1,6 +1,6 @@
 # Technical specification: mixed Japanese–English dictation for macOS
 
-**Version:** 2026-10-06
+**Version:** 2026-10-20
 **Applies to:** this repository (a modified VoiceInk, GPL-3.0)
 **Written for:** two readers. First, the author of a step-by-step build guide (the "roadmap writer"), who turns this into instructions a viewer hands to their own coding agent. Second, that coding agent itself, which builds the app inside an environment nobody here has seen.
 
@@ -38,9 +38,9 @@ The recipient's agent should choose a route with the person, using the criteria 
 
 ### 2.1 Which version to build
 
-- **This release:** the tag `v2.21-jp.2`. Route A clones exactly that tag: `git clone --branch v2.21-jp.2 https://github.com/matsumotoryosuke-dev/voice-dictation-jp-template.git`. The `main` branch may move after the guide is written; the tag does not.
+- **This release:** the tag `v2.21-jp.3`. Route A clones exactly that tag: `git clone --branch v2.21-jp.3 https://github.com/matsumotoryosuke-dev/voice-dictation-jp-template.git`. The `main` branch may move after the guide is written; the tag does not.
 - **The upstream it is based on:** VoiceInk commit `c09cc1f` in Beingpax/VoiceInk (2026-10-01; the app reports version 2.21).
-- **The two commit IDs are not a contradiction.** `c09cc1f` is the commit in upstream's repository. `d04a88f` is the first commit in this repository, which holds that same upstream code unchanged. `git diff d04a88f v2.21-jp.2` shows every change this template makes.
+- **The two commit IDs are not a contradiction.** `c09cc1f` is the commit in upstream's repository. `d04a88f` is the first commit in this repository, which holds that same upstream code unchanged. `git diff d04a88f v2.21-jp.3` shows every change this template makes.
 - GitHub's "Use this template" button copies the current `main` as a single new commit, without this history or the tags. After using it, `d04a88f` does not exist in the new repository; `NOTICE.md` still lists the changes. To keep the version fixed and the history readable, clone the tag instead.
 
 **Minimum agent capability.** Route A and C need an agent that can run commands on the person's Mac (a terminal-capable coding agent). An agent limited to chat can still guide the person command by command; it must then ask the person to paste each command's output back, and must treat "it looks done" as unverified until that output is seen.
@@ -53,7 +53,7 @@ The agent verifies each by doing the smallest real version of it, not by asking 
 
 | Precondition | Verify by | If absent |
 |---|---|---|
-| macOS 14.4 or later | `sw_vers -productVersion` | Stop. The app does not run on older macOS. |
+| macOS 15 (Sequoia) or later | `sw_vers -productVersion` | Stop. The app's deployment target is macOS 15.0, and building needs Xcode 16 or later, which does not run on older macOS. Macs that Apple does not update to macOS 15 (for example any 2015 Mac) cannot use this template. Lowering the requirement is not an adjustment: the app stores its data with SwiftData, which needs macOS 14, so it would mean rewriting the storage. |
 | Apple Silicon | `uname -m` returns `arm64` | **Unknown** whether Intel Macs work. Say so; do not promise it. |
 | Xcode installed and licence accepted | `xcodebuild -version` prints a version | The person installs Xcode from the App Store and opens it once. Command Line Tools alone are enough for `make test-core` but not for building the app. |
 | Disk space | `df -h ~` | Build output is about 3.5 GB; the local Whisper model is about 1.7 GB *(measured on one Mac)*. |
@@ -353,4 +353,4 @@ Each is a stop point or a reason the agent can act on.
 | Cost card | `VoiceInk/Features/Dashboard/Usage/*`, `Components/SonioxUsageCard.swift` |
 | Updates off in local builds | `VoiceInk/App/Updates/UpdaterViewModel.swift`, `App/MenuBar/MenuBarView.swift`, `Features/Settings/Views/SettingsView.swift` |
 | Unit tests | `Tests/*` (run with `make test-core`) |
-| Everything changed from upstream VoiceInk | `NOTICE.md`; `git diff d04a88f v2.21-jp.2` (`d04a88f` holds upstream `c09cc1f` unchanged; see 2.1) |
+| Everything changed from upstream VoiceInk | `NOTICE.md`; `git diff d04a88f v2.21-jp.3` (`d04a88f` holds upstream `c09cc1f` unchanged; see 2.1) |

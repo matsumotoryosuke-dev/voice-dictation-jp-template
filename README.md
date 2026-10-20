@@ -27,19 +27,19 @@
 
 ## 版
 
-- **このリリース**：タグ `v2.21-jp.2`。版を固定したいときは、このタグを指定して取得してください。`main` ブランチは後から変わることがあります。
+- **このリリース**：タグ `v2.21-jp.3`。版を固定したいときは、このタグを指定して取得してください。`main` ブランチは後から変わることがあります。
 
   ```bash
-  git clone --branch v2.21-jp.2 https://github.com/matsumotoryosuke-dev/voice-dictation-jp-template.git
+  git clone --branch v2.21-jp.3 https://github.com/matsumotoryosuke-dev/voice-dictation-jp-template.git
   ```
 
 - **元にした本家**：Beingpax/VoiceInk のコミット `c09cc1f`（2026-10-01。アプリの表示上の版は 2.21）
-- **このリポジトリの最初のコミット `d04a88f`** は、その本家をそのまま取り込んだものです。`git diff d04a88f v2.21-jp.2` で、このテンプレートの変更をすべて見られます。
+- **このリポジトリの最初のコミット `d04a88f`** は、その本家をそのまま取り込んだものです。`git diff d04a88f v2.21-jp.3` で、このテンプレートの変更をすべて見られます。
 - GitHub の「Use this template」で作ったリポジトリには、この履歴とタグは引き継がれません。
 
 ## 必要なもの
 
-- macOS 14.4 以降（動作確認は Apple Silicon の Mac のみ。Intel の Mac では未確認）
+- macOS 15（Sequoia）以降。macOS 15 に対応していない Mac（たとえば 2015 年の Mac）では使えません（動作確認は Apple Silicon の Mac のみ。Intel の Mac では未確認）
 - Xcode（App Store から。インストール後に一度起動して利用規約に同意）
 - 空き容量：ビルドに約 3.5GB、ローカルの Whisper モデルを使うならさらに約 1.7GB
 - 任意：[Soniox](https://soniox.com) の API キー（従量課金。リアルタイム認識は1時間あたり約 $0.12）
@@ -89,4 +89,4 @@ A modified [VoiceInk](https://github.com/Beingpax/VoiceInk) (GPL-3.0) tuned for 
 - Self-signed signing so rebuilds keep macOS permissions
 - No self-update in local builds, because upstream's updater would install the official app over this one
 
-This release is tagged `v2.21-jp.2` and is based on upstream commit `c09cc1f` (2026-10-01); this repository's first commit `d04a88f` holds that upstream unchanged. Build with `make local`; test with `make test-core`. This is not an official VoiceInk release; the VoiceInk name and icon belong to its author.
+This release is tagged `v2.21-jp.3` and is based on upstream commit `c09cc1f` (2026-10-01); this repository's first commit `d04a88f` holds that upstream unchanged. Requires macOS 15 (Sequoia) or later; tested on Apple Silicon only. Build with `make local`; test with `make test-core`. This is not an official VoiceInk release; the VoiceInk name and icon belong to its author.
