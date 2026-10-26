@@ -53,6 +53,12 @@ make local
 
 できあがったアプリは `~/Downloads/VoiceInk.app` に置かれます。`/Applications` に移してから開いてください。
 
+ビルドが「missing Metal Toolchain」で止まったときは、Xcode の追加部品をダウンロードしてから、もう一度 `make local` を実行してください（Xcode 27.1 では約 840MB）。
+
+```bash
+xcodebuild -downloadComponent MetalToolchain
+```
+
 **権限が毎回外れないようにする（推奨）**：キーチェーンアクセスで「証明書アシスタント → 証明書を作成」を開き、名前を `VoiceInk Local`、種類を「コード署名」にして自己署名証明書を作ってください。`make local` はこの証明書を見つけると、自動でビルドに署名します。署名しないビルドでは、ビルドし直すたびにアクセシビリティとマイクの許可を入れ直す必要があります。
 
 テストは Xcode なしでも動きます。

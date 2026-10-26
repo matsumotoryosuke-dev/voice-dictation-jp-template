@@ -155,6 +155,11 @@ class TranscriptionPipeline {
 
             text = text.trimmingCharacters(in: .whitespacesAndNewlines)
 
+            if SilenceGuard.isNoiseOnly(text, meanLevelDecibels: AudioFileMetadata.meanLevelDecibels(for: audioURL)) {
+                logger.notice("Dropped a lone interjection from a near-silent recording")
+                text = ""
+            }
+
             if text.isEmpty {
                 // Distinguishable from a failed request, so a dead microphone is recognisable.
                 // Nothing is delivered either: pasting an empty string wipes whatever the

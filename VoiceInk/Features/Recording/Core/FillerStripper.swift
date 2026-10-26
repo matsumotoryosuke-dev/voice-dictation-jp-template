@@ -117,3 +117,20 @@ enum FillerStripper {
         return result.trimmingCharacters(in: .whitespacesAndNewlines)
     }
 }
+
+/// Soniox answers a near-silent recording with "うん。": five times from 2026-10-24 to
+/// 2026-10-26, each on a clip whose mean level was between −64 and −69 dB. Real dictations
+/// went as quiet as −65 dB, so loudness alone cannot tell them apart; a lone interjection
+/// on a near-silent clip can. A "うん" actually said is far louder than −60 dB and stays.
+enum SilenceGuard {
+    static let quietLevelDecibels = -60.0
+    private static let interjections: Set<String> = ["うん", "ん"]
+    private static let ignored = CharacterSet.punctuationCharacters
+        .union(.symbols).union(.whitespacesAndNewlines)
+
+    static func isNoiseOnly(_ text: String, meanLevelDecibels: Double?) -> Bool {
+        guard let level = meanLevelDecibels, level < quietLevelDecibels else { return false }
+        let letters = String(String.UnicodeScalarView(text.unicodeScalars.filter { !ignored.contains($0) }))
+        return interjections.contains(letters)
+    }
+}

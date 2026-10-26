@@ -93,12 +93,17 @@ local: check setup
 		rm -rf "$$HOME/Downloads/VoiceInk.app"; \
 		ditto "$$APP_PATH" "$$HOME/Downloads/VoiceInk.app"; \
 		xattr -cr "$$HOME/Downloads/VoiceInk.app"; \
-		if security find-identity -v -p codesigning 2>/dev/null | grep -q "VoiceInk Local"; then \
+		LOCAL_CERT=$$(security find-identity -p codesigning 2>/dev/null | awk '/"VoiceInk Local"/ { print $$2; exit }'); \
+		if [ -n "$$LOCAL_CERT" ]; then \
 			ENTITLEMENTS="$(LOCAL_DERIVED_DATA)/Build/Intermediates.noindex/VoiceInk.build/Release/VoiceInk.build/VoiceInk.app.xcent"; \
 			codesign --force --deep --options runtime --timestamp=none \
 				$${ENTITLEMENTS:+--entitlements "$$ENTITLEMENTS"} \
-				--sign "VoiceInk Local" "$$HOME/Downloads/VoiceInk.app" >/dev/null 2>&1 && \
+				--sign "$$LOCAL_CERT" "$$HOME/Downloads/VoiceInk.app" >/dev/null 2>&1 && \
 			echo "Re-signed with the local certificate; macOS permissions survive this build."; \
+			security find-identity -v -p codesigning 2>/dev/null | grep -q "VoiceInk Local" || \
+			echo "Note: macOS marks the VoiceInk Local certificate as not trusted. The build is still signed with it, and permissions are tied to the certificate itself, so they survive."; \
+		else \
+			echo "WARNING: no VoiceInk Local certificate. This build is ad-hoc signed, so macOS will ask again for Accessibility and Microphone after you install it."; \
 		fi; \
 		echo ""; \
 		echo "Build complete! App saved to: ~/Downloads/VoiceInk.app"; \

@@ -55,7 +55,7 @@ The agent verifies each by doing the smallest real version of it, not by asking 
 |---|---|---|
 | macOS 15 (Sequoia) or later | `sw_vers -productVersion` | Stop. The app's deployment target is macOS 15.0, and building needs Xcode 16 or later, which does not run on older macOS. Macs that Apple does not update to macOS 15 (for example any 2015 Mac) cannot use this template. Lowering the requirement is not an adjustment: the app stores its data with SwiftData, which needs macOS 14, so it would mean rewriting the storage. |
 | Apple Silicon | `uname -m` returns `arm64` | **Unknown** whether Intel Macs work. Say so; do not promise it. |
-| Xcode installed and licence accepted | `xcodebuild -version` prints a version | The person installs Xcode from the App Store and opens it once. Command Line Tools alone are enough for `make test-core` but not for building the app. |
+| Xcode installed and licence accepted | `xcodebuild -version` prints a version | The person installs Xcode from the App Store and opens it once. Command Line Tools alone are enough for `make test-core` but not for building the app. Recent Xcode versions ship without the Metal Toolchain, and the build then stops with "cannot execute tool 'metal' due to missing Metal Toolchain". The fix is `xcodebuild -downloadComponent MetalToolchain` (839 MB with Xcode 27.1 *(measured on one Mac)*); ask the person before downloading. |
 | Disk space | `df -h ~` | Build output is about 3.5 GB; the local Whisper model is about 1.7 GB *(measured on one Mac)*. |
 | Memory, if Auto Learn's local reviewer is wanted | System Settings → About, or `sysctl hw.memsize` | The reviewer model used here occupies about 10 GB while loaded. On a 16 GB Mac, recommend leaving Auto Learn review off or choosing a smaller model, and say the smaller model is untested (**Unknown**). |
 | A cloud speech-to-text account (if cloud is chosen) | The person can sign in to the provider's console | The person creates the account and the API key **themselves**. See section 10. |
@@ -159,6 +159,7 @@ Applied to the final text before pasting. The person can edit the list in Settin
 - **あの / その (comma only):** removed only when a comma follows, because without one they usually mean "that" (あの件, その件).
 - **なんか:** never removed by default.
 - **Real words are protected:** a Japanese filler must both start and end at a boundary, so そのうち and へえー are never damaged. Longer forms match first (えーっと before えー).
+- **A lone "うん" from silence is dropped.** Soniox answered near-silent recordings (the key tapped twice without speaking) with "うん。" *(measured on one Mac: five times, each with a mean level between −64 and −69 dB)*. When the whole transcript is うん or ん and the recording's mean level is below −60 dB, nothing is pasted and the app shows "No speech detected". Loudness alone is not enough: real dictations went as quiet as −65 dB, but none of them was a lone interjection. A "うん" actually said is much louder and stays.
 
 ### 6.5 Dictionary and shared vocabulary
 
@@ -253,6 +254,7 @@ One JSON line per dictation in `~/.config/dictation/dictation-log.jsonl`. The jo
   ```
   Any line naming the app is a permission the person will be asked for again.
 - In zsh, `log` is a shell builtin. Call `/usr/bin/log`, or the command silently returns nothing.
+- macOS can later mark the self-signed certificate "not trusted" (`security find-identity -p codesigning` shows `CSSMERR_TP_NOT_TRUSTED`; seen on 2026-10-26 *(on one Mac)*). `make local` still signs with it, because the permissions are tied to the certificate's fingerprint, not to its trust setting. A build signed ad hoc instead would silently lose the permissions, so `make local` prints a warning when no certificate is found.
 
 ### 7.2 Commands
 
@@ -313,6 +315,7 @@ Each is a stop point or a reason the agent can act on.
 11. **Login order:** the app started before Ollama and never looked again (6.6).
 12. **An imitation of a tool's settings gave misleading results.** The tool's own code, run on the same audio, gave the real ones. Measure the real thing.
 13. **The fork kept upstream's self-updater.** One click on the dashboard's update button would have replaced the fork with the official app (7.3). When forking an app, look for anything that fetches and installs code from the original's servers.
+14. **The build script skipped signing without saying so** when macOS marked the certificate untrusted, and an installed build would have lost every permission. Check the signature (`codesign -dvv`) before every install.
 
 ---
 

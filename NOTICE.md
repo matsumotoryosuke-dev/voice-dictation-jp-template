@@ -17,6 +17,7 @@ The first commit in this repository (`d04a88f`) holds upstream `c09cc1f` unchang
 - `Tests/RecordingCoreTests/DictationJournal.boss.test.swift` (added)
 - `Tests/RecordingCoreTests/FallbackTranscriber.boss.test.swift` (added)
 - `Tests/RecordingCoreTests/FillerStripper.boss.test.swift` (added)
+- `Tests/RecordingCoreTests/SilenceGuard.boss.test.swift` (added)
 - `Tests/RecordingCoreTests/TranscriptionFallbackPolicy.boss.test.swift` (added)
 - `Tests/ShortcutCoreTests/ChordGuard.boss.test.swift` (added)
 - `Tests/UsageCoreTests/SonioxUsage.boss.test.swift` (added)
