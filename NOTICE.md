@@ -1,8 +1,8 @@
 # Notice of modifications
 
-This repository is a modified version of **VoiceInk** by Beingpax (https://github.com/Beingpax/VoiceInk), taken at upstream commit `c09cc1f` (2026-10-01) and distributed under the GNU General Public License v3.0 (see `LICENSE`).
+This repository, **Hanasu**, is a modified and renamed version of **VoiceInk** by Beingpax (https://github.com/Beingpax/VoiceInk), taken at upstream commit `c09cc1f` (2026-10-01) and distributed under the GNU General Public License v3.0 (see `LICENSE`).
 
-As required by section 5(a) of the GPL, the files below were added or modified relative to that upstream commit. The modifications are dated 2026-09-18 to 2026-10-20. `README.md` was replaced, and the original README is kept unchanged at `docs/UPSTREAM-README.md`.
+As required by section 5(a) of the GPL, the files below were added or modified relative to that upstream commit. The modifications are dated 2026-09-18 to 2026-10-26. `README.md` was replaced, and the original README is kept unchanged at `docs/UPSTREAM-README.md`.
 
 The first commit in this repository (`d04a88f`) holds upstream `c09cc1f` unchanged, so `git diff d04a88f v2.21-jp.3` shows exactly these changes for the release tagged `v2.21-jp.3`.
 
@@ -66,3 +66,53 @@ The first commit in this repository (`d04a88f`) holds upstream `c09cc1f` unchang
 - `README.md` (replaced)
 - `NOTICE.md` (added)
 - `docs/TECHNICAL_SPEC.md` (added)
+
+Renamed to Hanasu on 2026-10-26: user-visible text, app and menu bar icons (`VoiceInk/Assets.xcassets/AppIcon.appiconset/*`, `menuBarIcon.imageset/menuBarIcon.png`, replaced), build settings, and the removal of the paid tier, self-update and upstream announcements from the interface:
+
+- `VoiceInk.xcodeproj/project.pbxproj` (modified)
+- `VoiceInk/App/AppIntents/DismissMiniRecorderIntent.swift` (modified)
+- `VoiceInk/App/AppIntents/ToggleMiniRecorderIntent.swift` (modified)
+- `VoiceInk/App/ChangeLog/ChangeLogManager.swift` (modified)
+- `VoiceInk/App/ChangeLog/Views/ChangeLogView.swift` (modified)
+- `VoiceInk/App/Navigation/AppSidebar.swift` (modified)
+- `VoiceInk/App/Windows/WindowManager.swift` (modified)
+- `VoiceInk/Features/AudioSettings/Views/AudioSetupView.swift` (modified)
+- `VoiceInk/Features/Dashboard/Components/DashboardHeroCard.swift` (modified)
+- `VoiceInk/Features/Dashboard/Components/DashboardPeakHoursCard.swift` (modified)
+- `VoiceInk/Features/Dashboard/Components/DashboardTimeSavedCard.swift` (modified)
+- `VoiceInk/Features/Dashboard/Components/GitHubStarPromptCard.swift` (modified)
+- `VoiceInk/Features/Dashboard/State/DashboardStatsModels.swift` (modified)
+- `VoiceInk/Features/Dashboard/State/GitHubStarPromptCoordinator.swift` (modified)
+- `VoiceInk/Features/Dashboard/Views/DashboardInsightsView.swift` (modified)
+- `VoiceInk/Features/Dictionary/QuickAdd/DictionaryQuickAddPanel.swift` (modified)
+- `VoiceInk/Features/Dictionary/Views/DictionaryFilePanelService.swift` (modified)
+- `VoiceInk/Features/Dictionary/Views/VocabularyView.swift` (modified)
+- `VoiceInk/Features/Dictionary/Views/WordReplacementView.swift` (modified)
+- `VoiceInk/Features/History/Export/VoiceInkCSVExportService.swift` (modified)
+- `VoiceInk/Features/History/Views/HistorySettingsPanel.swift` (modified)
+- `VoiceInk/Features/Licensing/State/LicenseViewModel.swift` (modified)
+- `VoiceInk/Features/Licensing/Views/LicenseManagementView.swift` (modified)
+- `VoiceInk/Features/ModelLibrary/Views/ModelManagementView.swift` (modified)
+- `VoiceInk/Features/Modes/Models/CustomCommandTemplate.swift` (modified)
+- `VoiceInk/Features/Modes/Templates/StarterModeTemplate.swift` (modified)
+- `VoiceInk/Features/Modes/Views/ModeTriggerSection.swift` (modified)
+- `VoiceInk/Features/Modes/Views/ModeView.swift` (modified)
+- `VoiceInk/Features/Onboarding/Components/AIProviderVerificationCard.swift` (modified)
+- `VoiceInk/Features/Onboarding/Components/OnboardingLicenseCards.swift` (modified)
+- `VoiceInk/Features/Onboarding/Components/OnboardingTranscriptionSetupCard.swift` (modified)
+- `VoiceInk/Features/Onboarding/Components/PermissionStepRow.swift` (modified)
+- `VoiceInk/Features/Onboarding/Models/OnboardingExperienceModels.swift` (modified)
+- `VoiceInk/Features/Onboarding/State/OnboardingPermissionModels.swift` (modified)
+- `VoiceInk/Features/Onboarding/Views/OnboardingContextAwarenessScreen.swift` (modified)
+- `VoiceInk/Features/Onboarding/Views/OnboardingTrustScreen.swift` (modified)
+- `VoiceInk/Features/Recording/Capture/Recorder+RecordingDeviceSetup.swift` (modified)
+- `VoiceInk/Features/Settings/Backup/ImportExportService.swift` (modified)
+- `VoiceInk/Features/Settings/Support/EmailSupport.swift` (modified)
+- `VoiceInk/Info.plist` (modified)
+- `VoiceInk/InfoPlist.xcstrings` (modified)
+- `VoiceInk/Infrastructure/Diagnostics/LogExporter.swift` (modified)
+- `VoiceInk/Infrastructure/ExternalServices/GitHubCLIStarService.swift` (modified)
+- `VoiceInk/Infrastructure/Providers/Enhancement/Chat/AIChatCompletionService.swift` (modified)
+- `VoiceInk/Infrastructure/Providers/Enhancement/VoiceInkRefine/VoiceInkRefineModelDownloader.swift` (modified)
+- `VoiceInk/Infrastructure/RemoteConfig/AnnouncementsService.swift` (modified)
+- `VoiceInk/Localizable.xcstrings` (modified)

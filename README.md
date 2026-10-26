@@ -1,10 +1,12 @@
-# voice-dictation-jp-template
+# Hanasu（話す）
 
-日本語と英語が混ざった話し方でも、そのまま文字にできる macOS 用の音声入力アプリのテンプレートです。オープンソースの音声入力アプリ [VoiceInk](https://github.com/Beingpax/VoiceInk)（GPL-3.0）をもとに、次の変更を加えています。
+日本語と英語が混ざった話し方でも、そのまま文字にできる macOS 用の音声入力アプリ「Hanasu」のテンプレートです。オープンソースの音声入力アプリ [VoiceInk](https://github.com/Beingpax/VoiceInk)（作者 Beingpax、GPL-3.0）をもとに、次の変更を加えています。
 
-> This is a template for a macOS push-to-talk dictation app that handles Japanese and English mixed in one sentence. It is a modified version of [VoiceInk](https://github.com/Beingpax/VoiceInk) by Beingpax, licensed under GPL-3.0. English summary at the end.
+名前は、キーを押して**話す**、**離す**と文字になる、という使い方から。アイコンの声の棒は、横に寝かせた**ナス**の形をしています（葉＋ナス）。
 
-**このリポジトリは VoiceInk の公式版ではありません。** VoiceInk の作者は、ビルド済みのアプリを有料で配布しています。開発を支援したい方は [tryvoiceink.com](https://tryvoiceink.com) をご覧ください。
+> Hanasu is a template for a macOS push-to-talk dictation app that handles Japanese and English mixed in one sentence. It is a modified version of [VoiceInk](https://github.com/Beingpax/VoiceInk) by Beingpax, licensed under GPL-3.0. English summary at the end.
+
+**Hanasu は VoiceInk の公式版ではなく、別の名前の改変版です。** VoiceInk の作者は、ビルド済みのアプリを有料で配布しています。開発を支援したい方は [tryvoiceink.com](https://tryvoiceink.com) をご覧ください。
 
 ---
 
@@ -12,6 +14,7 @@
 
 | 追加・変更したこと | 何のためか |
 |---|---|
+| **名前とアイコンを Hanasu に** | VoiceInk の名前とアイコンは原作者のものなので、アプリの表示名・アイコン・画面の文言を Hanasu に変えました。有料版（Pro）の画面と、本家のお知らせ配信も外しています。 |
 | **Soniox のリアルタイム認識を前提にした設定** | 日本語の文中に英単語が入る話し方を、もっとも正確に文字にできたのが Soniox（`stt-rt-v5`）でした。キーを離してから約0.1秒で確定します。 |
 | **クラウドが失敗したらローカルの Whisper に切り替える** | ネット切断・キーの拒否・空の返答のときは、端末内の Whisper で文字にし、切り替えたことを画面に出します。 |
 | **右 Command キーの誤作動を防ぐ** | 右 Command を他のキーやクリックと一緒に押したときに、録音が始まってしまう不具合を防ぎます。 |
@@ -51,7 +54,7 @@
 make local
 ```
 
-できあがったアプリは `~/Downloads/VoiceInk.app` に置かれます。`/Applications` に移してから開いてください。
+できあがったアプリは `~/Downloads/Hanasu.app` に置かれます。`/Applications` に移してから開いてください。
 
 ビルドが「missing Metal Toolchain」で止まったときは、Xcode の追加部品をダウンロードしてから、もう一度 `make local` を実行してください（Xcode 27.1 では約 840MB）。
 
@@ -59,7 +62,7 @@ make local
 xcodebuild -downloadComponent MetalToolchain
 ```
 
-**権限が毎回外れないようにする（推奨）**：キーチェーンアクセスで「証明書アシスタント → 証明書を作成」を開き、名前を `VoiceInk Local`、種類を「コード署名」にして自己署名証明書を作ってください。`make local` はこの証明書を見つけると、自動でビルドに署名します。署名しないビルドでは、ビルドし直すたびにアクセシビリティとマイクの許可を入れ直す必要があります。
+**権限が毎回外れないようにする（推奨）**：キーチェーンアクセスで「証明書アシスタント → 証明書を作成」を開き、名前を `Hanasu Local`、種類を「コード署名」にして自己署名証明書を作ってください。`make local` はこの証明書を見つけると、自動でビルドに署名します。署名しないビルドでは、ビルドし直すたびにアクセシビリティとマイクの許可を入れ直す必要があります。
 
 テストは Xcode なしでも動きます。
 
@@ -69,22 +72,22 @@ make test-core
 
 ## 最初の設定
 
-1. システム設定 → プライバシーとセキュリティで、VoiceInk に「マイク」「アクセシビリティ」を許可する
-2. VoiceInk の Settings → AI Models → Cloud で Soniox の API キーを入れ、「Soniox V5」を選ぶ
-3. ローカルの代替として、Whisper large-v3-turbo を VoiceInk 内でダウンロードする
+1. システム設定 → プライバシーとセキュリティで、Hanasu に「マイク」「アクセシビリティ」を許可する
+2. Hanasu の Settings → AI Models → Cloud で Soniox の API キーを入れ、「Soniox V5」を選ぶ
+3. ローカルの代替として、Whisper large-v3-turbo を Hanasu 内でダウンロードする
 4. Shortcuts で右 Command・Hybrid（押して切り替え、長押しで押している間だけ録音）を選ぶ
 5. macOS 標準の音声入力のショートカットは、二重に反応しないようにオフにする
 6. Dictionary に、自分がよく使う固有名詞を入れる。誤認識されやすい語は Word Replacements にも入れる
 
 ## ライセンス
 
-GPL-3.0。元の VoiceInk と同じライセンスです。詳細は [LICENSE](LICENSE)、元の README は [docs/UPSTREAM-README.md](docs/UPSTREAM-README.md) にあります。VoiceInk の名前とアイコンは原作者のものです。
+GPL-3.0。元の VoiceInk と同じライセンスです。改変したファイルの一覧は [NOTICE.md](NOTICE.md) にあります。詳細は [LICENSE](LICENSE)、元の README は [docs/UPSTREAM-README.md](docs/UPSTREAM-README.md) にあります。VoiceInk の名前とアイコンは原作者のものなので、このテンプレートでは使っていません。
 
 ---
 
 ## English summary
 
-A modified [VoiceInk](https://github.com/Beingpax/VoiceInk) (GPL-3.0) tuned for speakers who mix Japanese and English inside one sentence:
+Hanasu is a modified [VoiceInk](https://github.com/Beingpax/VoiceInk) by Beingpax (GPL-3.0), renamed and tuned for speakers who mix Japanese and English inside one sentence:
 
 - Soniox real-time (`stt-rt-v5`) as the primary engine, with your vocabulary sent as context
 - Cloud-to-local fallback to on-device Whisper when the network, the key or the answer fails, announced on screen
@@ -93,6 +96,6 @@ A modified [VoiceInk](https://github.com/Beingpax/VoiceInk) (GPL-3.0) tuned for 
 - Auto Learn that actually captures hand corrections in Electron apps and in chat boxes, segments Japanese correctly, survives a slow local reviewer, and shows the reviewer's rejections for you to override
 - A shared vocabulary file with two-way sync, a per-dictation journal (no text), and Soniox spend on the dashboard
 - Self-signed signing so rebuilds keep macOS permissions
-- No self-update in local builds, because upstream's updater would install the official app over this one
+- No self-update, because upstream's updater would install the official app over this one; no paid tier, no upstream announcements
 
-This release is tagged `v2.21-jp.3` and is based on upstream commit `c09cc1f` (2026-10-01); this repository's first commit `d04a88f` holds that upstream unchanged. Requires macOS 15 (Sequoia) or later; tested on Apple Silicon only. Build with `make local`; test with `make test-core`. This is not an official VoiceInk release; the VoiceInk name and icon belong to its author.
+This release is tagged `v2.21-jp.3` and is based on upstream commit `c09cc1f` (2026-10-01); this repository's first commit `d04a88f` holds that upstream unchanged. Requires macOS 15 (Sequoia) or later; tested on Apple Silicon only. Build with `make local`; test with `make test-core`. This is not an official VoiceInk release; the VoiceInk name and icon belong to its author and are not used here.

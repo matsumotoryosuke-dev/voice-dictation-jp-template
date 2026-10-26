@@ -3,7 +3,7 @@ import Combine
 import Foundation
 import SwiftData
 
-// Drives the Dashboard's "help people discover VoiceInk" GitHub star card; gated on session count, not just window launch.
+// Drives the Dashboard's "help people discover Hanasu" GitHub star card; gated on session count, not just window launch.
 @MainActor
 final class GitHubStarPromptCoordinator: ObservableObject {
     static let shared = GitHubStarPromptCoordinator()
@@ -33,7 +33,7 @@ final class GitHubStarPromptCoordinator: ObservableObject {
     // Shown in the Dashboard footer only once Later has been clicked - never appears from a toast-only flow.
     var showsFooterStarButton: Bool { hasDeferredAtLeastOnce && (!isResolved || completionState != .none) }
 
-    private static let repoURL = URL(string: "https://github.com/Beingpax/VoiceInk")!
+    private static let repoURL = URL(string: "https://github.com/matsumotoryosuke-dev/voice-dictation-jp-template")!
     private static let showDelaySeconds: TimeInterval = 3
     private static let completionDisplaySeconds: TimeInterval = 1.5
     private static let minimumCompletedSessionsToPrompt = 30

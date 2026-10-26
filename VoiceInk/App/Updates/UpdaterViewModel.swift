@@ -17,13 +17,9 @@ final class UpdaterViewModel: NSObject, ObservableObject, SPUUpdaterDelegate {
         static let sparkleAutomaticChecks = "SUEnableAutomaticChecks"
     }
 
-    // A `make local` build of this fork must never update itself: the feed is the official
-    // VoiceInk's, and installing from it replaces every change in this fork.
-    #if LOCAL_BUILD
-        static let isEnabled = false
-    #else
-        static let isEnabled = true
-    #endif
+    // Hanasu never updates itself: the only feed is the official VoiceInk's, and installing
+    // from it would replace every change in this fork. The feed keys are gone from Info.plist.
+    static let isEnabled = false
 
     private let defaults: UserDefaults
     private var isUserInitiatedUpdateCheck = false

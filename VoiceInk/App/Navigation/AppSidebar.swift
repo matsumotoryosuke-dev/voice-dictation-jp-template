@@ -76,14 +76,14 @@ private extension ViewType {
         .audio,
     ]
 
+    // Hanasu has no paid tier, so upstream's licence page stays out of the sidebar.
     static let secondaryItems: [ViewType] = [
         .settings,
-        .license,
     ]
 
     static func assertSidebarItemsCoverAllCases() {
         #if DEBUG
-            let sidebarItems = primaryItems + secondaryItems
+            let sidebarItems = primaryItems + secondaryItems + [.license]
             assert(Set(sidebarItems) == Set(allCases) && sidebarItems.count == allCases.count)
         #endif
     }

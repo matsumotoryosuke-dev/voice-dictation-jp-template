@@ -1,8 +1,8 @@
 import Foundation
 
-// Stars the VoiceInk repo via the gh CLI when available, since GUI apps don't inherit shell PATH.
+// Stars the Hanasu repo via the gh CLI when available, since GUI apps don't inherit shell PATH.
 enum GitHubCLIStarService {
-    private static let repoSlug = "Beingpax/VoiceInk"
+    private static let repoSlug = "matsumotoryosuke-dev/voice-dictation-jp-template"
 
     enum RemoteStarState {
         case starred

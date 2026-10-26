@@ -56,7 +56,7 @@ private struct TrustHeader: View {
                         .fill(AppTheme.Surface.controlActive)
                 )
 
-            Text("VoiceInk is private by default")
+            Text("Hanasu is private by default")
                 .font(.system(size: 32, weight: .bold))
                 .foregroundColor(AppTheme.Text.primary)
                 .multilineTextAlignment(.center)
@@ -79,7 +79,7 @@ private struct TrustBody: View {
                     .foregroundColor(AppTheme.Text.primary)
                     .multilineTextAlignment(.center)
 
-                Text("VoiceInk is also open source, so you can inspect every single line of code.")
+                Text("Hanasu is also open source, so you can inspect every single line of code.")
                     .font(.system(size: 13))
                     .foregroundColor(AppTheme.Text.secondary)
                     .multilineTextAlignment(.center)

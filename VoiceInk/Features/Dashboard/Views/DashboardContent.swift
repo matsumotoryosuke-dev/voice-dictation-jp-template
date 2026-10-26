@@ -365,7 +365,7 @@ struct DashboardContent: View {
             return String(localized: "View dashboard insights")
         }
 
-        return String(localized: "Continue using VoiceInk to unlock these stats.")
+        return String(localized: "Continue using Hanasu to unlock these stats.")
     }
 
     private var insightsActionAccessibilityLabel: String {
@@ -690,7 +690,7 @@ struct DashboardContent: View {
                 .disabled(!updaterViewModel.canCheckForUpdates)
                 .help(
                     String(
-                        format: String(localized: "Open the VoiceInk %@ update"),
+                        format: String(localized: "Open the Hanasu %@ update"),
                         availableUpdate.displayVersion
                     )
                 )
@@ -868,7 +868,7 @@ struct DashboardContent: View {
 
     private var headerSubtitle: String {
         guard hasLoadedStatsSnapshot else {
-            return String(localized: "Pulling together your VoiceInk activity.")
+            return String(localized: "Pulling together your Hanasu activity.")
         }
 
         guard statsSummary.totalCount > 0 else {
@@ -975,7 +975,7 @@ private struct DashboardAccessibilityReminder: View {
                     .foregroundStyle(.primary)
                     .lineLimit(1)
 
-                Text("Required for VoiceInk shortcuts and app-wide controls to work properly.")
+                Text("Required for Hanasu shortcuts and app-wide controls to work properly.")
                     .font(.system(size: 11))
                     .foregroundStyle(.secondary)
                     .lineLimit(2)
@@ -1015,7 +1015,7 @@ private struct DashboardNoModesReminder: View {
                     .foregroundStyle(.primary)
                     .lineLimit(1)
 
-                Text("VoiceInk needs at least one mode to record. Create one to start dictating.")
+                Text("Hanasu needs at least one mode to record. Create one to start dictating.")
                     .font(.system(size: 11))
                     .foregroundStyle(.secondary)
                     .lineLimit(2)

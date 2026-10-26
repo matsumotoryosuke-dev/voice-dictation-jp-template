@@ -53,7 +53,7 @@ extension AIService {
                 provider: policy.provider,
                 includeRouterMetadata: true,
                 appReferer: URL(string: "https://tryvoiceink.com"),
-                appTitle: "VoiceInk",
+                appTitle: "Hanasu",
                 timeout: timeout
             )
             guard !OpenRouterRequestPolicy.outputWasTruncated(finishReason: completion.finishReason) else {

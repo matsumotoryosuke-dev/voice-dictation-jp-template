@@ -1,7 +1,7 @@
-# Technical specification: mixed Japanese–English dictation for macOS
+# Technical specification: Hanasu, mixed Japanese–English dictation for macOS
 
 **Version:** 2026-10-20
-**Applies to:** this repository (a modified VoiceInk, GPL-3.0)
+**Applies to:** this repository: Hanasu, a renamed and modified VoiceInk (GPL-3.0)
 **Written for:** two readers. First, the author of a step-by-step build guide (the "roadmap writer"), who turns this into instructions a viewer hands to their own coding agent. Second, that coding agent itself, which builds the app inside an environment nobody here has seen.
 
 This document separates three kinds of statement, because mixing them is how a guide ends up working only on its author's machine:
@@ -42,6 +42,13 @@ The recipient's agent should choose a route with the person, using the criteria 
 - **The upstream it is based on:** VoiceInk commit `c09cc1f` in Beingpax/VoiceInk (2026-10-01; the app reports version 2.21).
 - **The two commit IDs are not a contradiction.** `c09cc1f` is the commit in upstream's repository. `d04a88f` is the first commit in this repository, which holds that same upstream code unchanged. `git diff d04a88f v2.21-jp.3` shows every change this template makes.
 - GitHub's "Use this template" button copies the current `main` as a single new commit, without this history or the tags. After using it, `d04a88f` does not exist in the new repository; `NOTICE.md` still lists the changes. To keep the version fixed and the history readable, clone the tag instead.
+
+### 2.2 Name and identity
+
+- The app is called **Hanasu** (話す, "to speak"; 離す, "to let go" of the key; and 葉＋ナス, the leaf-and-eggplant pun in its icon). The VoiceInk name and icon belong to upstream's author and are not used.
+- Only what people see was renamed. The internal bundle ID (`com.prakashjoshipax.VoiceInk`), the Xcode product and module name (`VoiceInk`), the data folder (`~/Library/Application Support/com.prakashjoshipax.VoiceInk/`) and the log subsystem are upstream's. Changing them would cut an existing install off from its settings, history and saved keys, and macOS would ask for every permission again.
+- Consequence: the official VoiceInk and Hanasu share settings and data on the same Mac. Ask the person to use one of them, not both.
+- No paid tier: every build defines `LOCAL_BUILD`, so licensing, self-updating, iCloud sync and upstream's announcement feed are off however the app is built.
 
 **Minimum agent capability.** Route A and C need an agent that can run commands on the person's Mac (a terminal-capable coding agent). An agent limited to chat can still guide the person command by command; it must then ask the person to paste each command's output back, and must treat "it looks done" as unverified until that output is seen.
 
@@ -91,7 +98,7 @@ These are facts or preferences only the person has. The agent asks **one at a ti
 8. **Do you want the cloud cost shown in the app?** Only relevant with Soniox.
 
 9. **Do you allow the app to read your screen (Screen Recording)?**
-   Why: VoiceInk can read on-screen text to give its optional AI clean-up feature context. Dictation does not need it. Default: do not grant.
+   Why: Hanasu can read on-screen text to give its optional AI clean-up feature context. Dictation does not need it. Default: do not grant.
 
 ---
 
@@ -103,7 +110,7 @@ Each milestone is an end state. The agent records which milestones are done in a
 |---|---|---|
 | M0 | The repository builds its tests | `make test-core` exits 0 and reports the test count. |
 | M1 | The app builds and opens | `make local` ends with "Build complete"; the app launches from `/Applications`. |
-| M2 | Rebuilds keep permissions | After creating the `VoiceInk Local` certificate (section 7.1): `codesign -dvv /Applications/VoiceInk.app` shows `Authority=VoiceInk Local`; rebuild and reinstall once more; the dictation key still works without re-granting anything. |
+| M2 | Rebuilds keep permissions | After creating the `Hanasu Local` certificate (section 7.1): `codesign -dvv /Applications/Hanasu.app` shows `Authority=Hanasu Local`; rebuild and reinstall once more; the dictation key still works without re-granting anything. |
 | M3 | Dictation works in the person's main app | The person reads a prepared sentence that mixes their languages and contains three of their own terms. Text appears at the cursor; the terms are spelled as the person wants. |
 | M4 | Fallback works | With Wi-Fi off, dictation still produces text, and a notice says the local model was used. |
 | M5 | The key does not misfire | Right Command + C, Right Command + click, and Right Command + Shift do not start a recording (or start and cancel within a second). |
@@ -209,10 +216,10 @@ Applied to the final text before pasting. The person can edit the list in Settin
 - **Every correction sent must get a decision.** When the answer leaves some out (an empty list, a short list, decisions whose ID matches no correction sent, or an answer that is not a JSON array at all), the app asks once more about only those corrections, under the same IDs. Corrections still without a decision after that are **not** treated as rejected: they go back to the queue, and the app raises the Auto Learn warning, "The AI did not return a decision for N of M corrections." The review panel then shows that message instead of "No Corrections to Review". A timeout or network error fails the review as before, with every correction left queued.
 - **The reviewer is unreliable.** On the same 14 corrections, three runs accepted 3, 5 and 2 *(measured on one Mac)*. In manual review, rejected corrections, and those whose decision could not be applied as given, are therefore listed too, unticked and marked "AI rejected", with the changed words taken from the diff. Applying the list unchanged adds only what the reviewer accepted.
 - When the list holds corrections and the reviewer accepted none of them, a line above the list reads "The AI accepted none of these corrections. Check each one before you dismiss them.", so "Dismiss All" is not pressed on the reviewer's word alone.
-- Before reporting "no provider", the app asks Ollama again. At login VoiceInk can start before Ollama does and would otherwise treat Ollama as absent all day.
+- Before reporting "no provider", the app asks Ollama again. At login Hanasu can start before Ollama does and would otherwise treat Ollama as absent all day.
 
 **Ollama settings that matter:**
-- VoiceInk does not tell Ollama how much context to reserve, so Ollama's default window applies. With a 65,536-token default, the 12B model used here reserved 19 GB and stalled Ollama *(measured on one Mac)*.
+- Hanasu does not tell Ollama how much context to reserve, so Ollama's default window applies. With a 65,536-token default, the 12B model used here reserved 19 GB and stalled Ollama *(measured on one Mac)*.
 - Fix: create a model alias with a fixed window and select it for Auto Learn.
   ```
   FROM <your model>
@@ -247,7 +254,7 @@ One JSON line per dictation in `~/.config/dictation/dictation-log.jsonl`. The jo
 ### 7.1 Signing and macOS permissions
 
 - macOS ties Accessibility, Microphone and Input Monitoring grants to the app's code signature. An unsigned (ad-hoc) build gets a new identity every time, so **every rebuild silently removes those grants** while System Settings still shows them ticked. The symptom is a dictation key that does nothing.
-- **Fix:** a self-signed code-signing certificate named exactly `VoiceInk Local`, created by the person in Keychain Access (Certificate Assistant → Create a Certificate → Certificate Type: Code Signing). `make local` detects it and re-signs the finished app. No paid Apple Developer account is needed.
+- **Fix:** a self-signed code-signing certificate named exactly `Hanasu Local` (an older one named `VoiceInk Local` also works), created by the person in Keychain Access (Certificate Assistant → Create a Certificate → Certificate Type: Code Signing). `make local` detects it and re-signs the finished app. No paid Apple Developer account is needed.
 - **One-time exception:** a permission first granted to an older unsigned build stays tied to that build, and macOS asks once more after the first signed install. To check before telling the person "no re-grant needed":
   ```
   /usr/bin/log show --last 5m --info --predicate 'process == "tccd" AND eventMessage CONTAINS "Failed to match existing code requirement"'
@@ -261,7 +268,7 @@ One JSON line per dictation in `~/.config/dictation/dictation-log.jsonl`. The jo
 | Purpose | Command |
 |---|---|
 | Unit tests (no Xcode needed) | `make test-core` |
-| Build the app into `~/Downloads/VoiceInk.app` | `make local` |
+| Build the app into `~/Downloads/Hanasu.app` | `make local` |
 | Install | Quit the running app, then copy the app to `/Applications` and reopen it |
 | Read the app's logs | `/usr/bin/log show --last 30m --info --predicate 'subsystem == "com.prakashjoshipax.voiceink"'` |
 | Auto Learn logs only | add `AND category BEGINSWITH "AutoLearn"` |
@@ -339,7 +346,7 @@ Each is a stop point or a reason the agent can act on.
 - **Unknown:** Auto Learn capture in Notion, Obsidian and Gmail. It was verified only in the Claude desktop app.
 - **Unknown:** a smaller reviewer model for Macs with less memory.
 - The vocabulary sync's case-only defect (6.5) is not fixed.
-- VoiceInk can read the screen for its optional AI clean-up feature only if Screen Recording is granted. Dictation does not need that permission.
+- Hanasu can read the screen for its optional AI clean-up feature only if Screen Recording is granted. Dictation does not need that permission.
 
 ---
 

@@ -21,7 +21,11 @@ final class AnnouncementsService {
 
     // MARK: - Public API
 
+    /// The feed is upstream VoiceInk's, written for its users, so Hanasu does not read it.
+    static let isAvailable = false
+
     func start() {
+        guard Self.isAvailable else { return }
         timer?.invalidate()
         timer = Timer.scheduledTimer(withTimeInterval: refreshInterval, repeats: true) { [weak self] _ in
             self?.fetchAndMaybeShow()

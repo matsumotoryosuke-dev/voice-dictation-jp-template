@@ -4,7 +4,7 @@ WHISPER_CPP_DIR := $(DEPS_DIR)/whisper.cpp
 FRAMEWORK_PATH := $(WHISPER_CPP_DIR)/build-apple/whisper.xcframework
 LOCAL_DERIVED_DATA := $(CURDIR)/.local-build
 LOCAL_CODESIGN_IDENTITY ?=
-RUN_APP_NAME ?= VoiceInk
+RUN_APP_NAME ?= Hanasu
 
 .PHONY: all clean whisper setup build local check healthcheck help dev run release release-setup test-core
 
@@ -52,7 +52,7 @@ build: setup
 
 # Build locally with stable Apple Development signing when available.
 local: check setup
-	@echo "Building VoiceInk for local use (no Apple Developer certificate required)..."
+	@echo "Building Hanasu for local use (no Apple Developer certificate required)..."
 	@rm -rf "$(LOCAL_DERIVED_DATA)"
 	@SIGNING_IDENTITY="$(LOCAL_CODESIGN_IDENTITY)"; \
 	if [ -z "$$SIGNING_IDENTITY" ] && security find-identity -v -p codesigning 2>/dev/null | grep -q "VoiceInk Local"; then \
@@ -89,25 +89,27 @@ local: check setup
 		build
 	@APP_PATH="$(LOCAL_DERIVED_DATA)/Build/Products/Release/VoiceInk.app" && \
 	if [ -d "$$APP_PATH" ]; then \
-		echo "Copying VoiceInk.app to ~/Downloads..."; \
-		rm -rf "$$HOME/Downloads/VoiceInk.app"; \
-		ditto "$$APP_PATH" "$$HOME/Downloads/VoiceInk.app"; \
-		xattr -cr "$$HOME/Downloads/VoiceInk.app"; \
-		LOCAL_CERT=$$(security find-identity -p codesigning 2>/dev/null | awk '/"VoiceInk Local"/ { print $$2; exit }'); \
+		echo "Copying the app to ~/Downloads..."; \
+		rm -rf "$$HOME/Downloads/Hanasu.app"; \
+		ditto "$$APP_PATH" "$$HOME/Downloads/Hanasu.app"; \
+		xattr -cr "$$HOME/Downloads/Hanasu.app"; \
+		/usr/bin/plutil -replace CFBundleName -string Hanasu "$$HOME/Downloads/Hanasu.app/Contents/Info.plist"; \
+		LOCAL_CERT=$$(security find-identity -p codesigning 2>/dev/null | awk '/"Hanasu Local"|"VoiceInk Local"/ { print $$2; exit }'); \
 		if [ -n "$$LOCAL_CERT" ]; then \
 			ENTITLEMENTS="$(LOCAL_DERIVED_DATA)/Build/Intermediates.noindex/VoiceInk.build/Release/VoiceInk.build/VoiceInk.app.xcent"; \
 			codesign --force --deep --options runtime --timestamp=none \
 				$${ENTITLEMENTS:+--entitlements "$$ENTITLEMENTS"} \
-				--sign "$$LOCAL_CERT" "$$HOME/Downloads/VoiceInk.app" >/dev/null 2>&1 && \
+				--sign "$$LOCAL_CERT" "$$HOME/Downloads/Hanasu.app" >/dev/null 2>&1 && \
 			echo "Re-signed with the local certificate; macOS permissions survive this build."; \
-			security find-identity -v -p codesigning 2>/dev/null | grep -q "VoiceInk Local" || \
-			echo "Note: macOS marks the VoiceInk Local certificate as not trusted. The build is still signed with it, and permissions are tied to the certificate itself, so they survive."; \
+			security find-identity -v -p codesigning 2>/dev/null | grep -qE '"(Hanasu|VoiceInk) Local"' || \
+			echo "Note: macOS marks the local signing certificate as not trusted. The build is still signed with it, and permissions are tied to the certificate itself, so they survive."; \
 		else \
-			echo "WARNING: no VoiceInk Local certificate. This build is ad-hoc signed, so macOS will ask again for Accessibility and Microphone after you install it."; \
+			codesign --force --deep --sign - "$$HOME/Downloads/Hanasu.app" >/dev/null 2>&1; \
+			echo "WARNING: no \"Hanasu Local\" certificate. This build is ad-hoc signed, so macOS will ask again for Accessibility and Microphone after you install it."; \
 		fi; \
 		echo ""; \
-		echo "Build complete! App saved to: ~/Downloads/VoiceInk.app"; \
-		echo "Run with: open ~/Downloads/VoiceInk.app"; \
+		echo "Build complete! App saved to: ~/Downloads/Hanasu.app"; \
+		echo "Run with: open ~/Downloads/Hanasu.app"; \
 		echo ""; \
 		echo "Limitations of local builds:"; \
 		echo "  - No iCloud dictionary sync"; \
@@ -174,7 +176,7 @@ help:
 	@echo "  build              Build the VoiceInk Xcode project"
 	@echo "  local              Build locally with stable signing when available"
 	@echo "    LOCAL_CODESIGN_IDENTITY=<SHA or name> overrides automatic Apple Development detection"
-	@echo "  run                Launch the built VoiceInk app"
+	@echo "  run                Launch the built Hanasu app"
 	@echo "  dev                Build and run the app (for development)"
 	@echo "  release            Build DMG and Appcast using release-notes/<version>.html"
 	@echo "  release-setup      Store notarization credentials in Keychain"
