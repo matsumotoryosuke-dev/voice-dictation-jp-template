@@ -24,20 +24,20 @@
 | **口述ごとの記録** | `~/.config/dictation/dictation-log.jsonl` に、口述の長さ・音量・どの経路で文字になったか・かかった秒数を1行ずつ残します（本文は残しません）。 |
 | **Soniox の利用額をダッシュボードに表示** | Soniox の利用 API から、今月と先月の請求額を表示します。 |
 | **自己署名の証明書でビルドを固定** | ビルドし直すたびに macOS のアクセシビリティ・マイク権限が外れる問題を避けます。 |
-| **自動アップデートを止める** | 本家の自動アップデートは公式版の VoiceInk を入れるので、このテンプレートの変更がすべて消えてしまいます。そのため、`make local` で作ったアプリでは自動アップデートを止め、「Check for Updates」も表示しません。本家の新しい変更を取り込むときは、このテンプレートの変更を新しい本家に移植してからビルドします。 |
+| **自動アップデートを止める** | 本家の自動アップデートは公式版の VoiceInk を入れるので、このテンプレートの変更がすべて消えてしまいます。そのため、Hanasu では自動アップデートを止め、「Check for Updates」も表示しません。本家の新しい変更を取り込むときは、このテンプレートの変更を新しい本家に移植してからビルドします。 |
 
 変更したファイルの一覧は [NOTICE.md](NOTICE.md)、設計の詳細は [docs/TECHNICAL_SPEC.md](docs/TECHNICAL_SPEC.md) にあります。
 
 ## 版
 
-- **このリリース**：タグ `v2.21-jp.3`。版を固定したいときは、このタグを指定して取得してください。`main` ブランチは後から変わることがあります。
+- **このリリース**：タグ `v2.21-jp.4`。版を固定したいときは、このタグを指定して取得してください。`main` ブランチは後から変わることがあります。
 
   ```bash
-  git clone --branch v2.21-jp.3 https://github.com/matsumotoryosuke-dev/voice-dictation-jp-template.git
+  git clone --branch v2.21-jp.4 https://github.com/matsumotoryosuke-dev/voice-dictation-jp-template.git
   ```
 
 - **元にした本家**：Beingpax/VoiceInk のコミット `c09cc1f`（2026-10-01。アプリの表示上の版は 2.21）
-- **このリポジトリの最初のコミット `d04a88f`** は、その本家をそのまま取り込んだものです。`git diff d04a88f v2.21-jp.3` で、このテンプレートの変更をすべて見られます。
+- **このリポジトリの最初のコミット `d04a88f`** は、その本家をそのまま取り込んだものです。`git diff d04a88f v2.21-jp.4` で、このテンプレートの変更をすべて見られます。
 - GitHub の「Use this template」で作ったリポジトリには、この履歴とタグは引き継がれません。
 
 ## 必要なもの
@@ -98,4 +98,4 @@ Hanasu is a modified [VoiceInk](https://github.com/Beingpax/VoiceInk) by Beingpa
 - Self-signed signing so rebuilds keep macOS permissions
 - No self-update, because upstream's updater would install the official app over this one; no paid tier, no upstream announcements
 
-This release is tagged `v2.21-jp.3` and is based on upstream commit `c09cc1f` (2026-10-01); this repository's first commit `d04a88f` holds that upstream unchanged. Requires macOS 15 (Sequoia) or later; tested on Apple Silicon only. Build with `make local`; test with `make test-core`. This is not an official VoiceInk release; the VoiceInk name and icon belong to its author and are not used here.
+This release is tagged `v2.21-jp.4` and is based on upstream commit `c09cc1f` (2026-10-01); this repository's first commit `d04a88f` holds that upstream unchanged. Requires macOS 15 (Sequoia) or later; tested on Apple Silicon only. Build with `make local`; test with `make test-core`. This is not an official VoiceInk release; the VoiceInk name and icon belong to its author and are not used here.
