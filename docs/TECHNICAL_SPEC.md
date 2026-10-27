@@ -1,6 +1,6 @@
 # Technical specification: Hanasu, mixed Japanese–English dictation for macOS
 
-**Version:** 2026-10-26
+**Version:** 2026-10-27
 **Applies to:** this repository: Hanasu, a renamed and modified VoiceInk (GPL-3.0)
 **Written for:** two readers. First, the author of a step-by-step build guide (the "roadmap writer"), who turns this into instructions a viewer hands to their own coding agent. Second, that coding agent itself, which builds the app inside an environment nobody here has seen.
 
@@ -167,6 +167,7 @@ Applied to the final text before pasting. The person can edit the list in Settin
 - **なんか:** never removed by default.
 - **Real words are protected:** a Japanese filler must both start and end at a boundary, so そのうち and へえー are never damaged. Longer forms match first (えーっと before えー).
 - **A lone "うん" from silence is dropped.** Soniox answered near-silent recordings (the key tapped twice without speaking) with "うん。" *(measured on one Mac: five times, each with a mean level between −64 and −69 dB)*. When the whole transcript is うん or ん and the recording's mean level is below −60 dB, nothing is pasted and the app shows "No speech detected". Loudness alone is not enough: real dictations went as quiet as −65 dB, but none of them was a lone interjection. A "うん" actually said is much louder and stays.
+- **A "うん。" in front of speech after a silent start is dropped.** Soniox also fills a silent opening with "うん。" when speech follows it *(measured on one Mac: 29 dictations began with "うん。", and 28 of them had more than 1.2 s of silence before the first word, against 26% of all other dictations)*. When the transcript starts with "うん。" or "ん。" followed by more text, and the recording has more than 1.2 s before its first speech-level sound (a 50 ms window louder than −45 dB, after skipping the first 0.15 s, where the key clicks), the leading "うん。" is removed. "うん、" leading into a sentence ("うん、だから…") starts as promptly as any other dictation and stays. The cost: a "うん。" the speaker really said after a long pause is removed too.
 
 ### 6.5 Dictionary and shared vocabulary
 
