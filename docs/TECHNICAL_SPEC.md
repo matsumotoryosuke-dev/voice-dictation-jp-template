@@ -38,9 +38,9 @@ The recipient's agent should choose a route with the person, using the criteria 
 
 ### 2.1 Which version to build
 
-- **This release:** the tag `v2.21-jp.4`. Route A clones exactly that tag: `git clone --branch v2.21-jp.4 https://github.com/matsumotoryosuke-dev/voice-dictation-jp-template.git`. The `main` branch may move after the guide is written; the tag does not.
+- **This release:** the tag `v2.21-jp.5`. Route A clones exactly that tag: `git clone --branch v2.21-jp.5 https://github.com/matsumotoryosuke-dev/voice-dictation-jp-template.git`. The `main` branch may move after the guide is written; the tag does not.
 - **The upstream it is based on:** VoiceInk commit `c09cc1f` in Beingpax/VoiceInk (2026-10-01; the app reports version 2.21).
-- **The two commit IDs are not a contradiction.** `c09cc1f` is the commit in upstream's repository. `d04a88f` is the first commit in this repository, which holds that same upstream code unchanged. `git diff d04a88f v2.21-jp.4` shows every change this template makes.
+- **The two commit IDs are not a contradiction.** `c09cc1f` is the commit in upstream's repository. `d04a88f` is the first commit in this repository, which holds that same upstream code unchanged. `git diff d04a88f v2.21-jp.5` shows every change this template makes.
 - GitHub's "Use this template" button copies the current `main` as a single new commit, without this history or the tags. After using it, `d04a88f` does not exist in the new repository; `NOTICE.md` still lists the changes. To keep the version fixed and the history readable, clone the tag instead.
 
 ### 2.2 Name and identity
@@ -363,4 +363,4 @@ Each is a stop point or a reason the agent can act on.
 | Cost card | `VoiceInk/Features/Dashboard/Usage/*`, `Components/SonioxUsageCard.swift` |
 | Updates off | `VoiceInk/App/Updates/UpdaterViewModel.swift`, `App/MenuBar/MenuBarView.swift`, `Features/Settings/Views/SettingsView.swift` |
 | Unit tests | `Tests/*` (run with `make test-core`) |
-| Everything changed from upstream VoiceInk | `NOTICE.md`; `git diff d04a88f v2.21-jp.4` (`d04a88f` holds upstream `c09cc1f` unchanged; see 2.1) |
+| Everything changed from upstream VoiceInk | `NOTICE.md`; `git diff d04a88f v2.21-jp.5` (`d04a88f` holds upstream `c09cc1f` unchanged; see 2.1) |
