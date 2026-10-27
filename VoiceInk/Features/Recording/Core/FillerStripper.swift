@@ -133,4 +133,19 @@ enum SilenceGuard {
         let letters = String(String.UnicodeScalarView(text.unicodeScalars.filter { !ignored.contains($0) }))
         return interjections.contains(letters)
     }
+
+    /// Soniox also fills a silent start with "うん。" before real speech: 29 dictations from
+    /// 2026-09-19 to 2026-10-27 began with it, and 28 of them had more than 1.2 s of silence
+    /// before the first word, against 26% of all other dictations. "うん、" leading into the
+    /// sentence ("うん、だから…") starts as promptly as any other dictation and stays.
+    static let silentStartSeconds = 1.2
+    private static let leadingInterjection = #"^(うん|ん)。[ 　]*"#
+
+    static func droppingLeadingInterjection(_ text: String, silentStartSeconds silence: Double?) -> String {
+        guard let silence, silence > silentStartSeconds,
+              let range = text.range(of: leadingInterjection, options: .regularExpression),
+              range.upperBound < text.endIndex  // a lone うん is isNoiseOnly's call
+        else { return text }
+        return String(text[range.upperBound...])
+    }
 }

@@ -910,23 +910,54 @@ enum AudioFileMetadata {
     /// Average level of the recording, so a near-silent clip can be told apart from a
     /// transcription that simply failed. Nil when the file cannot be read.
     static func meanLevelDecibels(for url: URL) -> Double? {
-        guard let file = try? AVAudioFile(forReading: url),
-            let buffer = AVAudioPCMBuffer(pcmFormat: file.processingFormat,
-                                          frameCapacity: AVAudioFrameCount(file.length)),
-            (try? file.read(into: buffer)) != nil,
-            let samples = buffer.floatChannelData?[0]
-        else {
+        guard let buffer = pcmBuffer(for: url), let samples = buffer.floatChannelData?[0] else {
             return nil
         }
 
         let count = Int(buffer.frameLength)
         guard count > 0 else { return nil }
+        return levelDecibels(samples, from: 0, to: count)
+    }
+
+    /// Seconds before the first speech-level sound: a 50 ms window louder than −45 dB, where
+    /// silence sits near −75 dB and speech near −30 dB. The first 0.15 s, where the key press
+    /// clicks, is skipped. The whole clip when nothing is that loud; nil when unreadable.
+    static func silentStartSeconds(for url: URL) -> Double? {
+        guard let buffer = pcmBuffer(for: url), let samples = buffer.floatChannelData?[0] else {
+            return nil
+        }
+
+        let rate = buffer.format.sampleRate
+        let count = Int(buffer.frameLength)
+        let window = max(1, Int(rate / 20))
+        var start = window * 3
+        while start + window <= count {
+            if levelDecibels(samples, from: start, to: start + window) > -45 {
+                return Double(start) / rate
+            }
+            start += window
+        }
+        return Double(count) / rate
+    }
+
+    private static func pcmBuffer(for url: URL) -> AVAudioPCMBuffer? {
+        guard let file = try? AVAudioFile(forReading: url),
+            let buffer = AVAudioPCMBuffer(pcmFormat: file.processingFormat,
+                                          frameCapacity: AVAudioFrameCount(file.length)),
+            (try? file.read(into: buffer)) != nil
+        else {
+            return nil
+        }
+        return buffer
+    }
+
+    private static func levelDecibels(_ samples: UnsafeMutablePointer<Float>, from start: Int, to end: Int) -> Double {
         var sumOfSquares = 0.0
-        for index in 0..<count {
+        for index in start..<end {
             let sample = Double(samples[index])
             sumOfSquares += sample * sample
         }
-        let rms = (sumOfSquares / Double(count)).squareRoot()
+        let rms = (sumOfSquares / Double(end - start)).squareRoot()
         return rms > 0 ? 20 * log10(rms) : -100
     }
 

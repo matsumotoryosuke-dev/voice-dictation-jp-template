@@ -160,6 +160,13 @@ class TranscriptionPipeline {
                 text = ""
             }
 
+            let withoutSilentStartInterjection = SilenceGuard.droppingLeadingInterjection(
+                text, silentStartSeconds: AudioFileMetadata.silentStartSeconds(for: audioURL))
+            if withoutSilentStartInterjection != text {
+                logger.notice("Dropped a leading interjection that came from a silent start")
+                text = withoutSilentStartInterjection
+            }
+
             if text.isEmpty {
                 // Distinguishable from a failed request, so a dead microphone is recognisable.
                 // Nothing is delivered either: pasting an empty string wipes whatever the
